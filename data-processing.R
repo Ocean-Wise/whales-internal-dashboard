@@ -10,12 +10,13 @@
 ## "user" 
 library(magrittr)
 
-user = "AlexMitchell"
+# user = "AlexMitchell"
 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Import~~~~~~~~~~~~~~~~~~~~~~~####
 
 ## Get a list of files in the directory which we want to get the data from. It is important that older files are overwritten, not added. 
 file_list = list.files(paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/"), full.names = T)
+
 
 list_of_dfs = purrr::map(file_list, ~readr::read_csv(.x) %>% 
                            janitor::clean_names() %>% 
@@ -31,9 +32,9 @@ list2env(named_dfs, envir = .GlobalEnv)
 
 rm(list = c("list_of_dfs", "named_dfs", "df_name", "file_list"))
 
-sightings_spreadsheet = readxl::read_xlsx(paste0("C:/Users/", user, 
+sightings_spreadsheet = readxl::read_xlsx(paste0("C:/Users/", user,
                                                  "/Ocean Wise Conservation Association/Whales Initiative - General/BCCSN.Groups/Sightings/Cheat Sheet Archive/BCCSN Sightings Master.xlsx"),
-                                          sheet = "app") %>% 
+                                          sheet = "app") %>%
   janitor::clean_names()
 
 
@@ -46,7 +47,7 @@ alert_clean = alert_raw %>%
   
 ## detection cleaning
 sightings_clean = sightings_spreadsheet %>% 
-  dplyr::select(sub_date, sub_time, id = report_id, species_name, ecotype, species_category,
+  dplyr::select(sub_date, sub_time, id = report_id, species = species_name, ecotype, species_category,
                 species_category, latitude = latitude_dd, longitude = longitude_dd,
                 date, time, number_of_animals, email = reporter_email, organization = db_org) %>% 
   dplyr::mutate(time = format(time, "%H:%M:%S"),
@@ -55,6 +56,7 @@ sightings_clean = sightings_spreadsheet %>%
   dplyr::select(-time)
 
 detections_clean = detection_recent %>% 
+  janitor::clean_names() %>% 
   dplyr::mutate(details = stringr::str_remove_all(details, "[\\\\\"{}]")) %>% 
   dplyr::mutate(details = stringr::str_remove(details, "^[^:]+:")) %>% 
   dplyr::mutate(details = stringr::str_remove(details, "sightingDistance:")) %>%
@@ -62,41 +64,81 @@ detections_clean = detection_recent %>%
   dplyr::mutate(details = stringr::str_remove(details, "hydrophoneMeta:")) %>%
   tidyr::separate_rows(details, sep = ",") %>% 
   tidyr::separate(col = details, into = c("name", "value"), sep = ":") %>% 
+  dplyr::mutate(name = stringr::str_replace(name, "id", "value")) %>% 
   tidyr::spread(name, value) %>% 
   dplyr::select(-c(V1, code))
 
   ## user cleaning
-  user_clean = user_raw %>%
-    dplyr::select(c(id, auth_id, name, phonenumber, organization, vessel = vesselname)) %>% 
-    dplyr::rename(tracking_id = id)
-  
+user_clean = user_raw %>%
+  dplyr::select(c(id, auth_id, name, phonenumber, organization, vessel = vesselname)) %>% 
+  dplyr::rename(tracking_id = id)
+
 
   ####~~~~~~~~~~~~~~~~~~~~~~Data tidy~~~~~~~~~~~~~~~~~~~~~~~####
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+ 
   
   
   
   
   
 #   ####~~~~~~~~~~~~~~~~~~~~~~Metric Sandbox~~~~~~~~~~~~~~~~~~~~~~~####
+
+
+## sightings 2022 vs 2023
+### Use a combination of the Detections df and the sightings spreadsheet to get update to date info on sightings
+### 1. match cols between detections and sightings
+### 2. rbind rows to merge datasets 
+### 3. group per year
+### 4. comparison per year (with and without autonomous detections?)
+
+## As all of the sightings in the spreadsheet are not in real time (some submitted later via the app),
+## I need to match the sub time vs sighting time to see what is in real time, I would count real time 
+## as within an "Alert Period" of 30mins. Therefore, subtime - date < 30mins
+
+# real_time_sightings = sightings_clean %>% 
+  
+  
 #   
+# sightings_match = sightings_clean %>% 
+#   dplyr::select(id, species, 
+#                 latitude, longitude, 
+#                 date, number_of_animals,
+#                 email)
+# 
+# detections_match = detections_clean %>% 
+#   dplyr::select(c(date = sighted_at,
+#                   latitude, longitude,
+#                   number_of_animals = numberOfAnimals,
+#                   email, id,
+#                   species = name)) %>% 
+#   dplyr::filter(!id %in% sightings_match$id)
+# 
+# sightings_combined = rbind(sightings_match, detections_match)
+# 
+# total_sightings = sightings_combined %>% 
+#   dplyr::group_by(year = lubridate::year(date)) %>% 
+#   dplyr::summarise(count = dplyr::n())
+# 
+# period_2022 = total_sightings[6,2]
+# 
+# period_2023 = total_sightings[7,2]
+
+
+## number of north coast 2023 vs 2022
+# 
+# north_coast_sightings = sightings_combined %>% 
+#   dplyr::filter(dplyr::between(latitude, 51, 56) | dplyr::between(longitude, 126, 135)) %>% 
+#   dplyr::group_by(year = lubridate::year(date)) %>% 
+#   dplyr::summarise(count = dplyr::n()) %>% 
+#   dplyr::mutate(perc_diff = ((count-dplyr::lag(count)/dplyr::lag(count)))*100)
+
+
+## BC Sightings
+# Coordinates 
+# 51°00.00’N to 56°00.00’N (with Stewart, BC) 
+# 126°00.00’W to 135°00.00’W 
+
+
 #   
 #   ## Who recieved alerts? 
 #   
@@ -167,4 +209,8 @@ detections_clean = detection_recent %>%
 #                                    "864f93b8-ead2-cd5f-6278-e67dedfa8c1c"))
     
 
+# file_list = list.files("C:/Users/alext/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/", full.names = T)
 
+# sightings_spreadsheet = readxl::read_xlsx(paste0("C:/Users/alext/Ocean Wise Conservation Association/Whales Initiative - General/BCCSN.Groups/Sightings/Cheat Sheet Archive/BCCSN Sightings Master.xlsx"),
+#                                           sheet = "app") %>%
+#   janitor::clean_names()
