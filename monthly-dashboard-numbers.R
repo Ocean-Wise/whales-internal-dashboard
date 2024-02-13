@@ -38,17 +38,29 @@ perc_diff = alert_clean %>%
 
 ####~~~~~~~~~~~~~~~~~~~~~~total number of acartia alerts~~~~~~~~~~~~~~~~~~~~~~~####
 
-
+## Detections
 acartia = detections_clean %>% 
   dplyr::filter(!sourceEntity == "JASCO" & is.na(sourceEntity) == F)
 
-acartia_detections = acartia %>% 
+acartia_detections_table = acartia %>% 
+  dplyr::group_by(year = lubridate::year(sighted_at),
+                  month = lubridate::month(sighted_at)) %>% 
+  dplyr::summarise(count = dplyr::n())
+
+acartia_detections_total = acartia %>% 
   nrow()
 
-acartia_alerts = alert_clean %>% 
+## Alerts
+
+acartia_alerts_table = alert_clean %>% 
+  dplyr::filter(sighting_id %in% unique(acartia$id)) %>% 
+  dplyr::group_by(year = lubridate::year(sent_at),
+                  month = lubridate::month(sent_at)) %>% 
+  dplyr::summarise(count = dplyr::n())
+
+acartia_alerts_total = alert_clean %>% 
   dplyr::filter(sighting_id %in% unique(acartia$id)) %>% 
   nrow()
-
 
 ####~~~~~~~~~~~~~~~~~~~~~~total number of hydrophone alerts~~~~~~~~~~~~~~~~~~~~~~~####
 
