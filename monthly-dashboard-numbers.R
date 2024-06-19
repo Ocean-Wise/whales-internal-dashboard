@@ -80,10 +80,10 @@ overall_alerts = alert_clean %>%
   ) %>% 
   dplyr::select(year, month, total, 2:6) %>% 
   dplyr::mutate(
-    `Ocean Wise` = (`Ocean Wise`/total)*100,
-    `Sightings Partner` = (`Sightings Partner`/total)*100,
-    `Hydrophone` = (`Hydrophone`/total)*100,
-    `IR Camera` = (`IR Camera`/total)*100,
+    `Ocean Wise %` = (`Ocean Wise`/total)*100,
+    `Sightings Partner %` = (`Sightings Partner`/total)*100,
+    `Hydrophone %` = (`Hydrophone`/total)*100,
+    `IR Camera %` = (`IR Camera`/total)*100,
   )
 
 ## LOOK AT THIS
