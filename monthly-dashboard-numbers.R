@@ -20,9 +20,6 @@
 
 ##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
 
-
-
-
 ## Run this section first
 library(magrittr)
 
@@ -37,7 +34,7 @@ source(file = "./data-processing.R")
 ## the risk of ship strike for at least 15,000 encounters with whales
 
 ## total alerts and percentage increase between 2023 and 2024
-overall_alerts = alert_clean %>% 
+joined_tables = alert_clean %>% 
   dplyr::left_join(detections_clean, 
                    dplyr::join_by(sighting_id == id)
                    ) %>%
@@ -51,7 +48,9 @@ overall_alerts = alert_clean %>%
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "IR Camera",
                     stringr::str_detect(source_entity, "JASCO") == T ~ "Hydrophone",
                     TRUE ~ source_entity)
-                ) %>% 
+                )
+
+overall_alerts = joined_tables %>% 
   dplyr::group_by(
     year = lubridate::year(sent_at), 
     month = lubridate::month(sent_at),
@@ -61,39 +60,43 @@ overall_alerts = alert_clean %>%
     count = dplyr::n()) %>% 
   dplyr::filter(
     year == 2023 | year == 2024) %>% 
+  dplyr::mutate(date = lubridate::as_date(paste0(year,"/",month,"/01"))) %>% 
   tidyr::pivot_wider(
     names_from = source,
     values_from = count
   ) %>% 
   dplyr::mutate(
-    Hydrophone = tidyr::replace_na(Hydrophone, 0),
+    JASCO = tidyr::replace_na(Hydrophone, 0),
     `Sightings Partner` = tidyr::replace_na(`Sightings Partner`, 0),
-    `IR Camera` = tidyr::replace_na(`IR Camera`, 0)
+    `IR Camera` = tidyr::replace_na(`IR Camera`, 0),
+    SMRU = tidyr::replace_na(SMRUC, 0)
     ) %>% 
+  dplyr::select(-c(Hydrophone, SMRUC)) %>% 
   dplyr::group_by(year) %>% 
   dplyr::mutate(
-    total = cumsum(`Ocean Wise` + Hydrophone + `IR Camera` + `Sightings Partner`),
+    Total = cumsum(`Ocean Wise` + JASCO + `IR Camera` + `Sightings Partner` + SMRU),
     `Ocean Wise` = cumsum(`Ocean Wise`),
     `Sightings Partner` = cumsum(`Sightings Partner`),
-    Hydrophone = cumsum(Hydrophone),
-    `IR Camera` = cumsum(`IR Camera`)
+    `IR Camera` = cumsum(`IR Camera`),
+    JASCO = cumsum(JASCO),
+    SMRU = cumsum(SMRU)
   ) %>% 
-  dplyr::select(year, month, total, 2:6) %>% 
+  # dplyr::select(year, month, total, 2:6) %>%
   dplyr::mutate(
-    `Ocean Wise %` = (`Ocean Wise`/total)*100,
-    `Sightings Partner %` = (`Sightings Partner`/total)*100,
-    `Hydrophone %` = (`Hydrophone`/total)*100,
-    `IR Camera %` = (`IR Camera`/total)*100,
+    `Ocean Wise %` = (`Ocean Wise`/Total)*100,
+    `Sightings Partner %` = (`Sightings Partner`/Total)*100,
+    `JASCO %` = (JASCO/Total)*100,
+    `IR Camera %` = (`IR Camera`/Total)*100,
+    `SMRU %` = (SMRU/Total)*100
   )
 
 ## LOOK AT THIS
 overall_alerts
 
-
 perc_diff = overall_alerts %>% 
-  dplyr::select(year, month, total) %>%
+  dplyr::select(year, month, Total) %>%
   dplyr::group_by(year, month) %>% 
-  tidyr::pivot_wider(names_from = year, values_from = total) %>% 
+  tidyr::pivot_wider(names_from = year, values_from = Total) %>% 
   dplyr::mutate(perc_inc = ((`2024`-`2023`)/`2023`)*100)
 
 ## LOOK AT THIS
@@ -105,9 +108,9 @@ perc_diff
 # ### Mapping 
 # 
 # ## Sightings
-# sight_map = sightings_clean %>% 
+# sight_map = sightings_clean %>%
 #   dplyr::filter(lubridate::year(date) == 2024 & lubridate::month(date) == 4) %>%
-#   dplyr::mutate(col_palette = 
+#   dplyr::mutate(col_palette =
 #                   dplyr::case_when(
 #                     species == "Harbour porpoise" ~ "#A569BD",
 #                     species == "Killer whale" ~ "#17202A",
@@ -116,16 +119,16 @@ perc_diff
 #                     species == "Dall's porpoise" ~ "#566573",
 #                     species == "Grey whale" ~ "#AAB7B8",
 #                     species == "Pacific white-sided dolphin" ~ "#1ABC9C"
-#                   )) %>% 
+#                   )) %>%
 #   dplyr::mutate(
 #     popup_content = ifelse(
 #       !is.na(ecotype),
 #       paste("<b>Species:</b> ", species, "<b><br>Ecotype:</b> ", ecotype, "<b><br>Date:</b>", as.Date(date)),
 #       paste("<b>Species:</b> ", species, "<b><br>Date:</b> ", as.Date(date))
 #     )
-#   ) %>% 
+#   ) %>%
 #   leaflet::leaflet() %>%
-#   leaflet::addTiles(urlTemplate = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png") %>% 
+#   leaflet::addTiles(urlTemplate = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png") %>%
 #   leaflet::addCircleMarkers(
 #     lng = ~longitude,
 #     lat = ~latitude,
@@ -135,14 +138,13 @@ perc_diff
 #     fillOpacity = 0.8,
 #     opacity = 0.8,
 #     popup = ~popup_content
-#   ) %>% 
+#   ) %>%
 #   leaflet::addLegend(
 #     "bottomright",
 #     colors = c(unique(sight_map$col_palette)),
 #     labels = c(unique(sight_map$species)),
-#     opacity = 0.8
-#   )
-#   
+#     opacity = 0.8)
+
 # 
 # ## Alerts
 # 
@@ -237,55 +239,4 @@ perc_diff
 #   dplyr::filter(is.na(yoy_growth) == F)
 
 
-
-
-# ####~~~~~~~~~~~~~~~~~~~~~~total number of acartia alerts~~~~~~~~~~~~~~~~~~~~~~~####
-# 
-# ## Detections
-# acartia = detections_clean %>% 
-#   dplyr::filter(!sourceEntity == "JASCO" & is.na(sourceEntity) == F)
-# 
-# acartia_detections_table = acartia %>% 
-#   dplyr::group_by(year = lubridate::year(sighted_at),
-#                   month = lubridate::month(sighted_at)) %>% 
-#   dplyr::summarise(count = dplyr::n())
-# 
-# acartia_detections_total = acartia %>% 
-#   nrow()
-# 
-# ## Alerts
-# 
-# acartia_alerts_table = alert_clean %>% 
-#   dplyr::filter(sighting_id %in% unique(acartia$id)) %>% 
-#   dplyr::group_by(year = lubridate::year(sent_at),
-#                   month = lubridate::month(sent_at)) %>% 
-#   dplyr::summarise(count = dplyr::n())
-# 
-# acartia_alerts_total = alert_clean %>% 
-#   dplyr::filter(sighting_id %in% unique(acartia$id)) %>% 
-#   nrow()
-# 
-# ####~~~~~~~~~~~~~~~~~~~~~~total number of hydrophone alerts~~~~~~~~~~~~~~~~~~~~~~~####
-# 
-# ## hydrophone detections are grouped into detection events which is defined as a continuous string of 
-# ## detections without 30mins of silence. 
-# 
-# ## to get alerts we need to group detections sent by JASCO into events as one event = an alert
-# 
-# hydrophones = detections_clean %>% 
-#   dplyr::filter(sourceEntity == "JASCO") %>% 
-#   # Calculate the time difference between consecutive rows
-#   dplyr::mutate(time_difference = as.numeric(difftime(created_at, dplyr::lag(created_at)), "mins")) %>% 
-#   # Create a unique ID for each group where the time difference is less than 30 minutes
-#   dplyr::mutate(group_id = cumsum(ifelse(time_difference > 30 | is.na(time_difference), 1, 0)))
-# 
-# ## this is total amount of **detection events**
-# no_hydrophone_detections = length(unique(hydrophones$group_id))
-# 
-# ## filtering the alert data by detection id gives us the **number of alerts sent due to hydrophone detections**
-# no_hydrophone_alerts = alert_clean %>% 
-#   dplyr::filter(sighting_id %in% unique(hydrophones$id)) %>% 
-#   nrow()
-# 
-# 
 
