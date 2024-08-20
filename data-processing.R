@@ -2,7 +2,7 @@
 ## Author: Alex Mitchell
 ## Purpose: To automate the cleaning of WRAS data as far as possible to be used in future
 ##          analysis to test the efficacy of the WRAS, as well as any other data needs.
-## Date written: 2022-12-21
+## Date written: 2023-12-21
 ## Quality Assured: No
 
 ####~~~~~~~~~~~~~~~~~~~~~~Info~~~~~~~~~~~~~~~~~~~~~~~####
@@ -10,9 +10,72 @@
 ## "user" 
 library(magrittr)
 
-# user = "AlexMitchell"
+user = "AlexMitchell"
 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Import~~~~~~~~~~~~~~~~~~~~~~~####
+
+## API query to get sightings data from the sightings database without downloading the whole dataset... 
+
+# Basic params
+# base_url = "https://sightingsapi.ocean.org/sightings"
+#   
+# api_key = "rkcAx0oi7F9O0S7ZOOb482PMePhVCrk55jxpB60G"
+# 
+# params = list(
+#   api_key = api_key,
+#   limit = 1000,
+#   page = 1,
+#   sourceType = "autonomous"
+# )
+# 
+# # function to query API
+# fetch_data <- function(base_url, params) {
+#   response <- httr::GET(url = base_url, query = params, httr::add_headers(`x-api-key` = api_key))
+#   content <- httr::content(response, as = "parsed")
+#   data <- content$sightings
+#   
+#   return(data)
+# }
+# 
+# all_data <- list()
+# 
+# repeat {
+#   data <- fetch_data(base_url, params)
+# 
+#   # if (params$page == 10) {
+#   #   break
+#   # }
+#   
+#   if (length(data) == 0) {
+#     break
+#   }
+# 
+#   all_data <- append(all_data, list(data))
+#   
+#   params$page = params$page + 1
+# }
+# 
+# combined_data = dplyr::bind_rows(all_data) %>% 
+#   dplyr::distinct() %>% 
+#   janitor::clean_names()
+# 
+# 
+# x = combined_data %>% 
+#   dplyr::mutate(date_received == date_received) %>%
+#   dplyr::filter(
+#     !stringr::str_detect(comments, "(?i)test")) %>%
+#   dplyr::filter(
+#       !stringr::str_detect(location_desc, "(?i)test")) %>% 
+#   dplyr::filter(
+#       !stringr::str_detect(source_entity, "(?i)test")) %>% 
+#   dplyr::filter(
+#       !stringr::str_detect(reporter_email, "(?i)test")
+#       ) 
+      
+  # dplyr::filter(
+  #   !stringr::str_detect(reporter_email, "(?i)test")
+  # )
+
 
 ## Get a list of files in the directory which we want to get the data from. It is important that older files are overwritten, not added. 
 file_list = list.files(paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/"), full.names = T)
@@ -49,7 +112,8 @@ alert_clean = alert_raw %>%
 sightings_clean = sightings_spreadsheet %>% 
   dplyr::select(sub_date, sub_time, id = report_id, species = species_name, ecotype, species_category,
                 species_category, latitude = latitude_dd, longitude = longitude_dd,
-                date, time, number_of_animals, email = reporter_email, organization = db_org) %>% 
+                date, time, number_of_animals, email = reporter_email, organization = db_org,
+                confidence = id_confidence) %>% 
   dplyr::mutate(time = format(time, "%H:%M:%S"),
                 date = lubridate::as_date(date)) %>% 
   dplyr::mutate(date = lubridate::as_datetime(paste(date, time))) %>% 
