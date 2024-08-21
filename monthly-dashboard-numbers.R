@@ -1,3 +1,4 @@
+
 ####~~~~~~~~~~~~~~~~~~~~~~Monthly Dashboard Metrics~~~~~~~~~~~~~~~~~~~~~~~####
 ## Author: Alex Mitchell
 ## Purpose: To automate the production of metrics for the ELT dashboard. Should be able to be run by anyone in the team.
@@ -46,7 +47,8 @@ joined_tables = alert_clean %>%
                     stringr::str_detect(source_entity, "Acartia") == T ~ "Sightings Partner",
                     stringr::str_detect(source_entity, "Orca Network") == T ~ "Sightings Partner",
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "IR Camera",
-                    stringr::str_detect(source_entity, "JASCO") == T ~ "Hydrophone",
+                    stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
+                    stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRUC",
                     TRUE ~ source_entity)
                 )
 
@@ -66,28 +68,29 @@ overall_alerts = joined_tables %>%
     values_from = count
   ) %>% 
   dplyr::mutate(
-    JASCO = tidyr::replace_na(Hydrophone, 0),
     `Sightings Partner` = tidyr::replace_na(`Sightings Partner`, 0),
+    JASCO = tidyr::replace_na(JASCO, 0),
     `IR Camera` = tidyr::replace_na(`IR Camera`, 0),
     SMRU = tidyr::replace_na(SMRUC, 0)
     ) %>% 
-  dplyr::select(-c(Hydrophone, SMRUC)) %>% 
+  dplyr::select(-c(
+    # Hydrophone, 
+    SMRUC)) %>% 
   dplyr::group_by(year) %>% 
   dplyr::mutate(
-    Total = cumsum(`Ocean Wise` + JASCO + `IR Camera` + `Sightings Partner` + SMRU),
-    `Ocean Wise` = cumsum(`Ocean Wise`),
-    `Sightings Partner` = cumsum(`Sightings Partner`),
-    `IR Camera` = cumsum(`IR Camera`),
-    JASCO = cumsum(JASCO),
-    SMRU = cumsum(SMRU)
+    `Cumulative Ocean Wise` = cumsum(`Ocean Wise`),
+    `Cumulative Sightings Partner` = cumsum(`Sightings Partner`),
+    `Cumulative IR Camera` = cumsum(`IR Camera`),
+    `Cumulative JASCO` = cumsum(JASCO),
+    `Cumulative SMRU` = cumsum(SMRU),
+    Total = cumsum(`Ocean Wise` + JASCO + `IR Camera` + `Sightings Partner` + SMRU)
   ) %>% 
-  # dplyr::select(year, month, total, 2:6) %>%
   dplyr::mutate(
-    `Ocean Wise %` = (`Ocean Wise`/Total)*100,
-    `Sightings Partner %` = (`Sightings Partner`/Total)*100,
-    `JASCO %` = (JASCO/Total)*100,
-    `IR Camera %` = (`IR Camera`/Total)*100,
-    `SMRU %` = (SMRU/Total)*100
+    `Ocean Wise %` = (`Cumulative Ocean Wise`/Total)*100,
+    `Sightings Partner %` = (`Cumulative Sightings Partner`/Total)*100,
+    `JASCO %` = (`Cumulative JASCO`/Total)*100,
+    `IR Camera %` = (`Cumulative IR Camera`/Total)*100,
+    `SMRU %` = (`Cumulative SMRU`/Total)*100
   )
 
 ## LOOK AT THIS
@@ -97,7 +100,8 @@ perc_diff = overall_alerts %>%
   dplyr::select(year, month, Total) %>%
   dplyr::group_by(year, month) %>% 
   tidyr::pivot_wider(names_from = year, values_from = Total) %>% 
-  dplyr::mutate(perc_inc = ((`2024`-`2023`)/`2023`)*100)
+  dplyr::mutate(perc_inc = ((`2024`-`2023`)/`2023`)*100) %>%
+  dplyr::mutate(dplyr::across(c(`2024`,perc_inc), ~tidyr::replace_na(.x, 0)))
 
 ## LOOK AT THIS
 perc_diff

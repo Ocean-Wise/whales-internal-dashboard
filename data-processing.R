@@ -16,14 +16,14 @@ user = "AlexMitchell"
 
 ## API query to get sightings data from the sightings database without downloading the whole dataset... 
 
-# Basic params
+## Basic params
 # base_url = "https://sightingsapi.ocean.org/sightings"
-#   
+# 
 # api_key = "rkcAx0oi7F9O0S7ZOOb482PMePhVCrk55jxpB60G"
 # 
 # params = list(
 #   api_key = api_key,
-#   limit = 1000,
+#   limit = 10,
 #   page = 1,
 #   sourceType = "autonomous"
 # )
@@ -33,7 +33,7 @@ user = "AlexMitchell"
 #   response <- httr::GET(url = base_url, query = params, httr::add_headers(`x-api-key` = api_key))
 #   content <- httr::content(response, as = "parsed")
 #   data <- content$sightings
-#   
+# 
 #   return(data)
 # }
 # 
@@ -45,20 +45,20 @@ user = "AlexMitchell"
 #   # if (params$page == 10) {
 #   #   break
 #   # }
-#   
+# 
 #   if (length(data) == 0) {
 #     break
 #   }
 # 
 #   all_data <- append(all_data, list(data))
-#   
+# 
 #   params$page = params$page + 1
 # }
 # 
-# combined_data = dplyr::bind_rows(all_data) %>% 
-#   dplyr::distinct() %>% 
+# combined_data = dplyr::bind_rows(all_data) %>%
+#   dplyr::distinct() %>%
 #   janitor::clean_names()
-# 
+
 # 
 # x = combined_data %>% 
 #   dplyr::mutate(date_received == date_received) %>%
