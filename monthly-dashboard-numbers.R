@@ -44,13 +44,43 @@ joined_tables = alert_clean %>%
                   dplyr::case_when(
                     is.na(source_entity) == T ~ "Ocean Wise",
                     stringr::str_detect(source_entity, "Ocean Wise") == T ~ "Ocean Wise",
-                    stringr::str_detect(source_entity, "Acartia") == T ~ "Sightings Partner",
-                    stringr::str_detect(source_entity, "Orca Network") == T ~ "Sightings Partner",
-                    stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "IR Camera",
+                    stringr::str_detect(source_entity, "Acartia") == T ~ "Orca Network",
+                    stringr::str_detect(source_entity, "Orca Network") == T ~ "Orca Network",
+                    stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
                     stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
-                    stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRUC",
-                    TRUE ~ source_entity)
-                )
+                    stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
+                    TRUE ~ source_entity))
+
+## EXTRA STEP AS LAPIS MESSED UP THE DB. - this will take information from sightings spreadsheet and populate missing sightings data for alerts
+interim_sightings = sightings_clean %>% 
+  dplyr::mutate(
+    lat_new = latitude,
+    lon_new = longitude
+  ) %>% 
+  dplyr::select(c(id, lat_new, lon_new))
+
+interim_1 = joined_tables %>% 
+  dplyr::filter(is.na(latitude))
+
+
+interim_2 = joined_tables %>% 
+  dplyr::filter(!is.na(latitude))
+
+interim_1 = interim_1 %>% dplyr::left_join(
+  interim_sightings,
+  by = dplyr::join_by(sighting_id == id)) %>% 
+  dplyr::mutate(
+    latitude = ifelse(!is.na(lat_new), lat_new, latitude),  # Overwrite lat if lat_new is not NA
+    longitude = ifelse(!is.na(lon_new), lon_new, longitude)   # Overwrite lon if lon_new is not NA
+  ) %>%
+  dplyr::select(-lat_new, -lon_new) %>% 
+  dplyr::filter(!is.na(latitude))
+
+## Missing 91 lat lons from 2024 data, 1 from 2023, and 556 from 2019-2021
+
+joined_tables = dplyr::bind_rows(interim_1, interim_2)
+
+# still a few NAs in lat but I just will have to filter these out. 
 
 overall_alerts = joined_tables %>% 
   dplyr::group_by(
@@ -68,28 +98,27 @@ overall_alerts = joined_tables %>%
     values_from = count
   ) %>% 
   dplyr::mutate(
-    `Sightings Partner` = tidyr::replace_na(`Sightings Partner`, 0),
+    `Orca Network` = tidyr::replace_na(`Orca Network`, 0),
     JASCO = tidyr::replace_na(JASCO, 0),
-    `IR Camera` = tidyr::replace_na(`IR Camera`, 0),
-    SMRU = tidyr::replace_na(SMRUC, 0)
+    `WhaleSpotter` = tidyr::replace_na(`WhaleSpotter`, 0),
+    SMRU = tidyr::replace_na(SMRU, 0)
     ) %>% 
-  dplyr::select(-c(
-    # Hydrophone, 
-    SMRUC)) %>% 
+  # dplyr::select(-c(
+  #   SMRUC)) %>% 
   dplyr::group_by(year) %>% 
   dplyr::mutate(
     `Cumulative Ocean Wise` = cumsum(`Ocean Wise`),
-    `Cumulative Sightings Partner` = cumsum(`Sightings Partner`),
-    `Cumulative IR Camera` = cumsum(`IR Camera`),
+    `Cumulative Orca Network` = cumsum(`Orca Network`),
+    `Cumulative WhaleSpotter` = cumsum(`WhaleSpotter`),
     `Cumulative JASCO` = cumsum(JASCO),
     `Cumulative SMRU` = cumsum(SMRU),
-    Total = cumsum(`Ocean Wise` + JASCO + `IR Camera` + `Sightings Partner` + SMRU)
+    Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU)
   ) %>% 
   dplyr::mutate(
     `Ocean Wise %` = (`Cumulative Ocean Wise`/Total)*100,
-    `Sightings Partner %` = (`Cumulative Sightings Partner`/Total)*100,
+    `Orca Network %` = (`Cumulative WhaleSpotter`/Total)*100,
     `JASCO %` = (`Cumulative JASCO`/Total)*100,
-    `IR Camera %` = (`Cumulative IR Camera`/Total)*100,
+    `WhaleSpotter %` = (`Cumulative WhaleSpotter`/Total)*100,
     `SMRU %` = (`Cumulative SMRU`/Total)*100
   )
 

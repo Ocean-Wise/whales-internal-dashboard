@@ -14,25 +14,87 @@
 
 ##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
 
+## Number of alerts overall
+## Edit the filter depending on what data source you want. Although may need to be edited to make it look a little nicer when using a longer timeframe... 
+
+vfpa_data = joined_tables %>% dplyr::filter(source_entity == "SMRUC") %>% 
+  dplyr::mutate(day_night = 
+                   dplyr::case_when(
+                     dplyr::between(lubridate::hour(sent_at), 6, 20) ~ "day",
+                     dplyr::between(lubridate::hour(sent_at), 21, 5) ~ "night")
+      # lubridate::hour(sent_at) >= 6 & lubridate::hour(sent_at) <= 21 ~ "day",
+      # lubridate::hour(sent_at) <= 5 & lubridate::hour(sent_at) >= 22 ~ "night"
+      ) %>% 
+  dplyr::mutate(day_night = tidyr::replace_na(day_night, "night")) %>% 
+  dplyr::select(
+    c(id, tracking_id, sighting_id, created_at, sent_at, sighted_at, day_night)
+    ) %>% 
+  # dplyr::group_by(day_night) %>% 
+  # dplyr::summarise(n = dplyr::n())
+  dplyr::group_by(date = lubridate::date(sent_at),day_night) %>% 
+  dplyr::summarise(count = dplyr::n()) %>% 
+  tidyr::pivot_wider(
+    names_from = day_night,
+    values_from = count
+  ) %>% 
+  plotly::plot_ly(
+    x = ~date,
+    y = ~day,
+    type = "bar",
+    name = "Daylight hours",
+    marker = list(color = "#F2B949") 
+  ) %>% 
+  plotly::add_trace(
+    y = ~night,
+    name = "Outside daylight\n hours",
+    marker = list(color = "#6449F2")
+  ) %>% 
+  plotly::layout(xaxis = list(title = "",
+                              showline = TRUE,
+                              showgrid = FALSE,
+                              showticklabels = TRUE,
+                              linecolor = 'rgb(204, 204, 204)',
+                              linewidth = 2,
+                              autotick = T,
+                              ticks = 'outside',
+                              tickcolor = 'rgb(204, 204, 204)',
+                              tickwidth = 2,
+                              ticklength = 5,
+                              tickfont = list(family = 'Arial',
+                                              size = 16,
+                                              color = 'rgb(82, 82, 82)')),
+                 yaxis = list(title = list(text='No. Alerts', font = list(size = 16, family = 'Arial Black'), standoff = 25),
+                              showgrid = FALSE,
+                              zeroline = FALSE,
+                              showline = FALSE,
+                              showticklabels = T,
+                              tickfont = list(family = 'Arial',
+                                              size = 16,
+                                              color = 'rgb(82, 82, 82)')),
+                 barmode = "stack")
+  
+  
 
 
-#### ~~~~~~~~~~~ Line graph of alerts ~~~~~~~~~~~ ####
+ggplot2::geomgeom_bar
+
+X#### ~~~~~~~~~~~ Line graph of alerts ~~~~~~~~~~~ ####
 
 # 
-#   plotly::plot_ly(overall_alerts,
+# plotly::plot_ly(overall_alerts,
 #                   x = ~date,
 #                   y = ~`Ocean Wise`,
 #                   type = "scatter",
-#                   mode = "lines") %>% 
+#                   mode = "lines") %>%
 #   plotly::add_lines(y = ~`Ocean Wise`)
 # 
-# line_graph = overall_alerts %>% 
-#   dplyr::ungroup() %>% 
-#   dplyr::select(3:9) %>% 
-#   dplyr::filter(lubridate::year(date) == 2024) %>% 
+# line_graph = overall_alerts %>%
+#   dplyr::ungroup() %>%
+#   dplyr::select(3:9) %>%
+#   dplyr::filter(lubridate::year(date) == 2024) %>%
 #   tidyr::pivot_longer(cols = 2:7, names_to = "source")
 # 
-# line_graph %>% 
+# line_graph %>%
 #   ggplot(aes(x = date,
 #              y = value,
 #              group = source,
@@ -40,15 +102,15 @@
 #   geom_line(size = 1) +
 #   scale_y_continuous(label = scales::comma) +
 #   scale_colour_brewer(palette = "Dark2") +
-#   # ggthemes::theme_hc() + 
-#   # ggthemes::scale_colour_hc() +
-#   # hrbrthemes::theme_ipsum() +
-#   # theme(panel.background = element_rect(fill = "white",
-#   #                                       colour = "white",
-#   #                                       size = 0.5, linetype = "solid"),
-#   #       panel.grid.major.x = element_blank(),
-#   #       panel.grid.minor.x = element_blank()
-#   #       ) +
+# ggthemes::theme_hc() +
+# ggthemes::scale_colour_hc() +
+# hrbrthemes::theme_ipsum() +
+# theme(panel.background = element_rect(fill = "white",
+#                                       colour = "white",
+#                                       size = 0.5, linetype = "solid"),
+#       panel.grid.major.x = element_blank(),
+#       panel.grid.minor.x = element_blank()
+#       ) +
 #   theme_minimal() +
 #   theme(panel.grid.major.x = element_blank(),
 #         panel.grid.minor.x = element_blank()) +
@@ -59,10 +121,7 @@
 # 
 # 
 # library(plotly)
-# 
-# d <- diamonds[sample(nrow(diamonds), 1000), ]
-# plot_ly(d, x = ~carat, y = ~price, text = ~paste("Clarity: ", clarity),
-#         mode = "markers")
+
 
 
 
@@ -72,7 +131,7 @@
 
  ## Sightings
  sight_map = sightings_clean %>%
-   dplyr::filter(lubridate::year(date) == 2024 & lubridate::month(date) == 5) %>%
+   dplyr::filter(lubridate::year(date) == 2024 & lubridate::month(date) == 6) %>%
    dplyr::mutate(species = 
                    dplyr::case_when(
                      stringr::str_detect(species, "dolphin") ~ "Dolphin/Porpoise species",
@@ -173,3 +232,28 @@ alert_map %>%
     labels = c(unique(alert_map$detection_method)),
     opacity = 0.8
   )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
