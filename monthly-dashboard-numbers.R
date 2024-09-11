@@ -88,6 +88,7 @@ overall_alerts = joined_tables %>%
     month = lubridate::month(sent_at),
     source = source_entity
     ) %>% 
+  # dplyr::filter(month > 1) %>%
   dplyr::summarise(
     count = dplyr::n()) %>% 
   dplyr::filter(
@@ -116,7 +117,7 @@ overall_alerts = joined_tables %>%
   ) %>% 
   dplyr::mutate(
     `Ocean Wise %` = (`Cumulative Ocean Wise`/Total)*100,
-    `Orca Network %` = (`Cumulative WhaleSpotter`/Total)*100,
+    `Orca Network %` = (`Cumulative Orca Network`/Total)*100,
     `JASCO %` = (`Cumulative JASCO`/Total)*100,
     `WhaleSpotter %` = (`Cumulative WhaleSpotter`/Total)*100,
     `SMRU %` = (`Cumulative SMRU`/Total)*100
@@ -136,7 +137,67 @@ perc_diff = overall_alerts %>%
 perc_diff
 
 
-###~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Sandbox ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~###
+#### ~~~~~~~~~~~~~~~~ How many detections has each source made? ~~~~~~~~~~~~~~~~~~~~~~~ ####
+
+
+## Sightings numbers
+
+sights_pre = detections_clean %>% 
+  janitor::clean_names() %>%
+  dplyr::mutate(source_entity =
+                  dplyr::case_when(
+                    is.na(source_entity) == T ~ "Ocean Wise",
+                    stringr::str_detect(source_entity, "Ocean Wise") == T ~ "Ocean Wise",
+                    stringr::str_detect(source_entity, "Acartia") == T ~ "Orca Network",
+                    stringr::str_detect(source_entity, "Orca Network") == T ~ "Orca Network",
+                    stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
+                    stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
+                    stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
+                    # add in whale alert alaska here
+                    TRUE ~ source_entity)) 
+
+
+sights = sights_pre %>%  
+  dplyr::group_by(year_mon = zoo::as.yearmon(detections_clean$sighted_at), source_entity) %>% 
+  dplyr::summarise(n = dplyr::n()) %>%
+  tidyr::pivot_wider(names_from = source_entity,
+                     values_from = n) %>% 
+  dplyr::mutate(dplyr::across(dplyr::everything(), ~tidyr::replace_na(.x, 0))) %>% 
+  dplyr::select(-c(`TEST - PLEASE IGNORE`, string)) %>% 
+  dplyr::filter(lubridate::year(year_mon) != 2019)
+
+
+#### ~~~~~~~~~~~~~~~~ Where are the automated detection methods? ~~~~~~~~~~~~~~~~~~~~~~~ ####
+
+locations = tibble::tibble(
+  station_name = c("Lime Kiln", "Boundary Pass", "Carmanah Lighthouse", "Active Pass North", "Active Pass South", "Saturna Island"),
+  station_type = c("hydrophone","hydrophone","infrared camera","infrared camera","infrared camera","infrared camera"),
+  latitude = c(48.515834, 48.773653, 48.611406, 48.877781, 48.857528, 48.792393),
+  longitude = c(-123.152978,  -123.042226, -124.751156, -123.316408, -123.344047, -123.096821))
+
+
+## Map of locations with icons
+
+# icon_list <- iconList(
+#   "hydrophone" = makeIcon(iconUrl = "./../../../Downloads/Picture4.png", iconWidth = 44, iconHeight = 44),
+#   "infrared camera" = makeIcon(iconUrl = "./../../../Downloads/Picture3.png", iconWidth = 38, iconHeight = 38)
+# )
+# 
+# leaflet::leaflet(data = locations) %>%
+#   leaflet::addTiles() %>%
+#   leaflet::addMarkers(
+#     ~longitude, ~latitude, 
+#     icon = ~icon_list[station_type], 
+#     label = ~paste("<b>Station Name:</b>", station_name, "<br><b>Type:</b>", station_type),
+#     labelOptions = labelOptions(noHide = FALSE, textsize = "12px", direction = "auto")
+#   ) %>%
+#   # leaflet::addTitle("Stations Map", 
+#   #                   leaflet::titleOpts = list(textsize = "24px", textOnly = TRUE)) %>%
+#   leaflet::addMiniMap(toggleDisplay = TRUE) %>%
+#   leaflet::setView(lng = -123.1207, lat = 49.2827, zoom = 6)
+
+
+####~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Sandbox ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 # 
 # ### Mapping 
 # 
