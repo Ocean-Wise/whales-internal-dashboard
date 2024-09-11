@@ -71,15 +71,14 @@ user = "AlexMitchell"
 #   dplyr::filter(
 #       !stringr::str_detect(reporter_email, "(?i)test")
 #       ) 
-      
-  # dplyr::filter(
-  #   !stringr::str_detect(reporter_email, "(?i)test")
-  # )
+# dplyr::filter(
+#   !stringr::str_detect(reporter_email, "(?i)test")
+# )
 
 
 ## Get a list of files in the directory which we want to get the data from. It is important that older files are overwritten, not added. 
 file_list = list.files(paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/"), full.names = T) %>% 
-  .[. != "C:/Users/AlexMitchell/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/historical_data"]
+  .[. != paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/historical_data")]
   
 
 
