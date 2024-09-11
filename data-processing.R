@@ -10,7 +10,7 @@
 ## "user" 
 library(magrittr)
 
-user = "AlexMitchell"
+# user = "AlexMitchell"
 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Import~~~~~~~~~~~~~~~~~~~~~~~####
 
