@@ -121,7 +121,9 @@ overall_alerts = joined_tables %>%
     `JASCO %` = (`Cumulative JASCO`/Total)*100,
     `WhaleSpotter %` = (`Cumulative WhaleSpotter`/Total)*100,
     `SMRU %` = (`Cumulative SMRU`/Total)*100
-  )
+  ) %>% 
+  dplyr::filter(month < lubridate::month(Sys.Date())) ## This line removes the current months data
+                                                      ##  as reporting generally happens for the last month
 
 ## LOOK AT THIS
 overall_alerts

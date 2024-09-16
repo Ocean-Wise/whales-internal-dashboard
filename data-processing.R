@@ -1,8 +1,9 @@
 ####~~~~~~~~~~~~~~~~~~~~~~Cleaning WRAS data~~~~~~~~~~~~~~~~~~~~~~~####
 ## Author: Alex Mitchell
-## Purpose: To automate the cleaning of WRAS data as far as possible to be used in future
-##          analysis to test the efficacy of the WRAS, as well as any other data needs.
+## Purpose: To automate the cleaning of sightings network data as far as possible to be used in future
+##          analysis for reporting, monthly dashboard etc.
 ## Date written: 2023-12-21
+## Date updated: 2024-09-16
 ## Quality Assured: No
 
 ####~~~~~~~~~~~~~~~~~~~~~~Info~~~~~~~~~~~~~~~~~~~~~~~####
@@ -86,8 +87,10 @@ list_of_dfs = purrr::map(file_list, ~readr::read_csv(.x) %>%
                            janitor::clean_names() %>% 
                            dplyr::filter(., dplyr::if_any(dplyr::starts_with("s") & dplyr::ends_with("_at"), ~ . >= as.Date("2019-01-01"))))
 
-df_name = c("alert_raw", #alert data from database 
+df_name = c("alert_raw", #alert recent data from database 
+            "alert_historic", #alert historic data from database 
             "detection_recent", #contains sightings
+            "detection_historic", #historical data from database so we don't have to process all data everytime
             "user_raw")
 
 named_dfs = setNames(list_of_dfs, df_name)
@@ -105,11 +108,13 @@ sightings_spreadsheet = readxl::read_xlsx(paste0("C:/Users/", user,
 ####~~~~~~~~~~~~~~~~~~~~~~Data Clean~~~~~~~~~~~~~~~~~~~~~~~####
 
 ## alert cleaning
-alert_clean = alert_raw %>% 
+alert_clean = alert_historic %>% 
+  dplyr::bind_rows(
+    dplyr::anti_join(alert_raw, alert_historic))
   dplyr::select(-location_id)
+
   
-  
-## detection cleaning
+## sightings spreadsheet cleaning
 sightings_clean = sightings_spreadsheet %>% 
   dplyr::select(sub_date, sub_time, id = report_id, species = species_name, ecotype, species_category,
                 species_category, latitude = latitude_dd, longitude = longitude_dd,
@@ -120,8 +125,12 @@ sightings_clean = sightings_spreadsheet %>%
   dplyr::mutate(date = lubridate::as_datetime(paste(date, time))) %>% 
   dplyr::select(-time)
 
-detections_clean = detection_recent %>% 
-  janitor::clean_names() %>% 
+
+## Detection cleaning
+detections_clean = detection_historic %>% 
+    dplyr::bind_rows(
+      dplyr::anti_join(detection_recent, detection_historic)
+    ) %>% 
   dplyr::mutate(details = stringr::str_remove_all(details, "[\\\\\"{}]")) %>% 
   dplyr::mutate(details = stringr::str_remove(details, "^[^:]+:")) %>% 
   dplyr::mutate(details = stringr::str_remove(details, "sightingDistance:")) %>%
@@ -132,6 +141,7 @@ detections_clean = detection_recent %>%
   dplyr::mutate(name = stringr::str_replace(name, "id", "value")) %>% 
   tidyr::spread(name, value) %>% 
   dplyr::select(-c(V1, code))
+
 
   ## user cleaning
 user_clean = user_raw %>%
