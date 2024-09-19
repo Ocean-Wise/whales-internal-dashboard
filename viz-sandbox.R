@@ -310,7 +310,7 @@ overall_alerts %>%
                  ))
 
 
-S#### ~~~~~~~~~~~ USER GROWTH ~~~~~~~~~~~ ####
+#### ~~~~~~~~~~~ USER GROWTH ~~~~~~~~~~~ ####
 
 ### IMPORT DATA ###
 
