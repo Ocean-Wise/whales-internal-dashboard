@@ -99,13 +99,9 @@ overall_alerts = joined_tables %>%
     values_from = count
   ) %>% 
   dplyr::mutate(
-    `Orca Network` = tidyr::replace_na(`Orca Network`, 0),
-    JASCO = tidyr::replace_na(JASCO, 0),
-    `WhaleSpotter` = tidyr::replace_na(`WhaleSpotter`, 0),
-    SMRU = tidyr::replace_na(SMRU, 0)
-    ) %>% 
-  # dplyr::select(-c(
-  #   SMRUC)) %>% 
+    dplyr::across(
+      dplyr::everything(), ~tidyr::replace_na(.x, 0))
+  ) %>% 
   dplyr::group_by(year) %>% 
   dplyr::mutate(
     `Cumulative Ocean Wise` = cumsum(`Ocean Wise`),
@@ -113,14 +109,16 @@ overall_alerts = joined_tables %>%
     `Cumulative WhaleSpotter` = cumsum(`WhaleSpotter`),
     `Cumulative JASCO` = cumsum(JASCO),
     `Cumulative SMRU` = cumsum(SMRU),
-    Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU)
+    `Cumulative Whale Alert` = cumsum(`Whale Alert Alaska`),
+    Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU + `Whale Alert Alaska`)
   ) %>% 
   dplyr::mutate(
     `Ocean Wise %` = (`Cumulative Ocean Wise`/Total)*100,
     `Orca Network %` = (`Cumulative Orca Network`/Total)*100,
     `JASCO %` = (`Cumulative JASCO`/Total)*100,
     `WhaleSpotter %` = (`Cumulative WhaleSpotter`/Total)*100,
-    `SMRU %` = (`Cumulative SMRU`/Total)*100
+    `SMRU %` = (`Cumulative SMRU`/Total)*100,
+    `Whale Alert %` = (`Cumulative Whale Alert`/Total)*100
   ) %>% 
   dplyr::filter(month < lubridate::month(Sys.Date())) ## This line removes the current months data
                                                       ##  as reporting generally happens for the last month

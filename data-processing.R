@@ -110,7 +110,7 @@ sightings_spreadsheet = readxl::read_xlsx(paste0("C:/Users/", user,
 ## alert cleaning
 alert_clean = alert_historic %>% 
   dplyr::bind_rows(
-    dplyr::anti_join(alert_raw, alert_historic))
+    dplyr::anti_join(alert_raw, alert_historic)) %>% 
   dplyr::select(-location_id)
 
   
@@ -126,21 +126,35 @@ sightings_clean = sightings_spreadsheet %>%
   dplyr::select(-time)
 
 
+
+
+
 ## Detection cleaning
+detection_historic = detection_historic %>% 
+  dplyr::mutate(sighted_at = lubridate::ymd_hm(detection_historic$sighted_at),
+                created_at = lubridate::ymd_hm(detection_historic$created_at))
+
 detections_clean = detection_historic %>% 
     dplyr::bind_rows(
       dplyr::anti_join(detection_recent, detection_historic)
     ) %>% 
   dplyr::mutate(details = stringr::str_remove_all(details, "[\\\\\"{}]")) %>% 
   dplyr::mutate(details = stringr::str_remove(details, "^[^:]+:")) %>% 
+  dplyr::mutate(details = stringr::str_replace_all(details, "\\s*:\\s*", ":")) %>%
+  dplyr::mutate(details = stringr::str_replace_all(details, "\\s*,\\s*", ",")) %>%
   dplyr::mutate(details = stringr::str_remove(details, "sightingDistance:")) %>%
   dplyr::mutate(details = stringr::str_remove(details, "travelDirection:")) %>%
   dplyr::mutate(details = stringr::str_remove(details, "hydrophoneMeta:")) %>%
   tidyr::separate_rows(details, sep = ",") %>% 
-  tidyr::separate(col = details, into = c("name", "value"), sep = ":") %>% 
-  dplyr::mutate(name = stringr::str_replace(name, "id", "value")) %>% 
-  tidyr::spread(name, value) %>% 
-  dplyr::select(-c(V1, code))
+  tidyr::separate(col = details, into = c("colname", "data"), sep = ":") %>% 
+  dplyr::mutate(colname = stringr::str_replace(colname, "id", "value")) %>% 
+  dplyr::mutate(colname = stringr::str_replace(colname, "name", "species")) %>% 
+  dplyr::mutate(colname = stringr::str_trim(colname)) %>% 
+  dplyr::group_by(id) %>% 
+  dplyr::mutate(dplyr::across(where(is.character), ~ dplyr::na_if(., ""))) %>% 
+  tidyr::pivot_wider(names_from = colname, values_from = data) %>% 
+  janitor::clean_names() %>% 
+  janitor::remove_empty(which = "cols")
 
 
   ## user cleaning
@@ -289,3 +303,4 @@ user_clean = user_raw %>%
 # sightings_spreadsheet = readxl::read_xlsx(paste0("C:/Users/alext/Ocean Wise Conservation Association/Whales Initiative - General/BCCSN.Groups/Sightings/Cheat Sheet Archive/BCCSN Sightings Master.xlsx"),
 #                                           sheet = "app") %>%
 #   janitor::clean_names()
+
