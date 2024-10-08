@@ -24,6 +24,7 @@
 ## Run this section first
 library(magrittr)
 
+## UPDATE THIS TO YOUR USERNAME 
 user = "AlexMitchell"
 
 source(file = "./data-processing.R")
@@ -33,6 +34,7 @@ source(file = "./data-processing.R")
 ### Goal...
 ## Send a total of 15,000 WRAS alerts (at least a 10% increase from 2023 baseline) in BC and WA waters to reduce 
 ## the risk of ship strike for at least 15,000 encounters with whales
+
 
 ## total alerts and percentage increase between 2023 and 2024
 joined_tables = alert_clean %>% 
@@ -57,10 +59,11 @@ interim_sightings = sightings_clean %>%
     lat_new = latitude,
     lon_new = longitude
   ) %>% 
-  dplyr::select(c(id, lat_new, lon_new))
+  dplyr::select(c(id, species, lat_new, lon_new))
 
 interim_1 = joined_tables %>% 
-  dplyr::filter(is.na(latitude))
+  dplyr::filter(is.na(latitude)) %>% 
+  dplyr::select(-species)
 
 
 interim_2 = joined_tables %>% 
@@ -91,8 +94,8 @@ overall_alerts = joined_tables %>%
   # dplyr::filter(month > 1) %>%
   dplyr::summarise(
     count = dplyr::n()) %>% 
-  dplyr::filter(
-    year == 2023 | year == 2024) %>% 
+  # dplyr::filter(
+  #   year == 2023 | year == 2024) %>% 
   dplyr::mutate(date = lubridate::as_date(paste0(year,"/",month,"/01"))) %>% 
   tidyr::pivot_wider(
     names_from = source,
@@ -127,6 +130,7 @@ overall_alerts = joined_tables %>%
 overall_alerts
 
 perc_diff = overall_alerts %>% 
+  dplyr::filter(year == 2023 | year == 2024) %>% 
   dplyr::select(year, month, Total) %>%
   dplyr::group_by(year, month) %>% 
   tidyr::pivot_wider(names_from = year, values_from = Total) %>% 
@@ -153,7 +157,6 @@ sights_pre = detections_clean %>%
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
                     stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
                     stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
-                    # add in whale alert alaska here
                     TRUE ~ source_entity)) 
 
 
@@ -168,169 +171,37 @@ sights = sights_pre %>%
 
 
 #### ~~~~~~~~~~~~~~~~ Where are the automated detection methods? ~~~~~~~~~~~~~~~~~~~~~~~ ####
-
-locations = tibble::tibble(
-  station_name = c("Lime Kiln", "Boundary Pass", "Carmanah Lighthouse", "Active Pass North", "Active Pass South", "Saturna Island"),
-  station_type = c("hydrophone","hydrophone","infrared camera","infrared camera","infrared camera","infrared camera"),
-  latitude = c(48.515834, 48.773653, 48.611406, 48.877781, 48.857528, 48.792393),
-  longitude = c(-123.152978,  -123.042226, -124.751156, -123.316408, -123.344047, -123.096821))
-
-
-## Map of locations with icons
-
-# icon_list <- iconList(
-#   "hydrophone" = makeIcon(iconUrl = "./../../../Downloads/Picture4.png", iconWidth = 44, iconHeight = 44),
-#   "infrared camera" = makeIcon(iconUrl = "./../../../Downloads/Picture3.png", iconWidth = 38, iconHeight = 38)
-# )
 # 
-# leaflet::leaflet(data = locations) %>%
+# locations = tibble::tibble(
+#   station_name = c("Fin Island", "Lime Kiln", "Boundary Pass", "Carmanah Lighthouse", "Active Pass North", "Active Pass South", "Saturna Island"),
+#   station_type = c("hydrophone", "hydrophone","hydrophone","infrared camera","infrared camera","infrared camera","infrared camera"),
+#   latitude = c(53.211, 48.515834, 48.773653, 48.611406, 48.877781, 48.857528, 48.792393),
+#   longitude = c(-129.498, -123.152978,  -123.042226, -124.751156, -123.316408, -123.344047, -123.096821))
+# # 
+# # 
+# # ## Map of locations with icons
+# # 
+# icon_list = leaflet::iconList(
+#   "hydrophone" = leaflet::makeIcon(iconUrl = "./../../../Downloads/Picture4.png", iconWidth = 60, iconHeight = 60),
+#   "infrared camera" = leaflet::makeIcon(iconUrl = "./../../../Downloads/Picture3.png", iconWidth = 38, iconHeight = 38)
+# )
+# # 
+# locations %>% 
+#   dplyr::filter(station_type == "infrared camera") %>% 
+#   leaflet::leaflet() %>%
 #   leaflet::addTiles() %>%
 #   leaflet::addMarkers(
-#     ~longitude, ~latitude, 
-#     icon = ~icon_list[station_type], 
+#     ~longitude, ~latitude,
+#     icon = ~icon_list[station_type],
 #     label = ~paste("<b>Station Name:</b>", station_name, "<br><b>Type:</b>", station_type),
-#     labelOptions = labelOptions(noHide = FALSE, textsize = "12px", direction = "auto")
+#     leaflet::labelOptions(noHide = FALSE, textsize = "12px", direction = "auto")
 #   ) %>%
-#   # leaflet::addTitle("Stations Map", 
+#   # leaflet::addTitle("Stations Map",
 #   #                   leaflet::titleOpts = list(textsize = "24px", textOnly = TRUE)) %>%
 #   leaflet::addMiniMap(toggleDisplay = TRUE) %>%
 #   leaflet::setView(lng = -123.1207, lat = 49.2827, zoom = 6)
-
+# 
 
 ####~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Sandbox ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
-# 
-# ### Mapping 
-# 
-# ## Sightings
-# sight_map = sightings_clean %>%
-#   dplyr::filter(lubridate::year(date) == 2024 & lubridate::month(date) == 4) %>%
-#   dplyr::mutate(col_palette =
-#                   dplyr::case_when(
-#                     species == "Harbour porpoise" ~ "#A569BD",
-#                     species == "Killer whale" ~ "#17202A",
-#                     species == "Humpback whale" ~ "#E74C3C",
-#                     species == "Fin whale" ~ "#F4D03F",
-#                     species == "Dall's porpoise" ~ "#566573",
-#                     species == "Grey whale" ~ "#AAB7B8",
-#                     species == "Pacific white-sided dolphin" ~ "#1ABC9C"
-#                   )) %>%
-#   dplyr::mutate(
-#     popup_content = ifelse(
-#       !is.na(ecotype),
-#       paste("<b>Species:</b> ", species, "<b><br>Ecotype:</b> ", ecotype, "<b><br>Date:</b>", as.Date(date)),
-#       paste("<b>Species:</b> ", species, "<b><br>Date:</b> ", as.Date(date))
-#     )
-#   ) %>%
-#   leaflet::leaflet() %>%
-#   leaflet::addTiles(urlTemplate = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png") %>%
-#   leaflet::addCircleMarkers(
-#     lng = ~longitude,
-#     lat = ~latitude,
-#     radius = 3,
-#     group = ~species,
-#     color = ~col_palette,
-#     fillOpacity = 0.8,
-#     opacity = 0.8,
-#     popup = ~popup_content
-#   ) %>%
-#   leaflet::addLegend(
-#     "bottomright",
-#     colors = c(unique(sight_map$col_palette)),
-#     labels = c(unique(sight_map$species)),
-#     opacity = 0.8)
-
-# 
-# ## Alerts
-# 
-# alert_map = alert_clean %>% 
-#   dplyr::filter(lubridate::year(sent_at) == 2024 & lubridate::month(sent_at) == 4) %>% 
-#   dplyr::left_join(detections_clean, 
-#                    dplyr::join_by(sighting_id == id)) %>% 
-#   janitor::clean_names() %>% 
-#   dplyr::mutate(source_entity = 
-#                   dplyr::case_when(
-#                     is.na(source_entity) == T ~ "Ocean Wise",
-#                     stringr::str_detect(source_entity, "Ocean Wise") == T ~ "Ocean Wise",
-#                     stringr::str_detect(source_entity, "Acartia") == T ~ "Orca Network via Conserve.io app",
-#                     TRUE ~ source_entity 
-#                   )) %>% 
-#   dplyr::mutate(col_palette = 
-#                   dplyr::case_when(
-#                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "#A569BD",
-#                     stringr::str_detect(source_entity, "Orca Network") == T ~ "#27AE60",
-#                     stringr::str_detect(source_entity, "Ocean Wise") == T ~ "#F5B041",
-#                     stringr::str_detect(source_entity, "JASCO") == T ~ "#17202A"
-#                   )) %>% 
-#   dplyr::mutate(detection_method = 
-#                   dplyr::case_when(
-#                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "Infrared camera",
-#                     stringr::str_detect(source_entity, "Orca Network") == T ~ "Partner sightings network",
-#                     stringr::str_detect(source_entity, "Ocean Wise") == T ~ "Whale report app",
-#                     stringr::str_detect(source_entity, "JASCO") == T ~ "Hydrophone"
-#                   )) %>% 
-#   dplyr::mutate(
-#     popup_content = 
-#       paste("<b>Species:</b> ", name,
-#             "<b><br>Source:</b> ", source_entity,
-#             "<b><br>Detection method:</b>", detection_method,
-#             "<b><br>Date:</b>", as.Date(sent_at)
-#             ))
-# 
-# alert_map %>% 
-#   leaflet::leaflet() %>%
-#   leaflet::addTiles(urlTemplate = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png") %>% 
-#   leaflet::addCircleMarkers(
-#     lng = ~longitude,
-#     lat = ~latitude,
-#     radius = 3,
-#     color = ~col_palette,
-#     fillOpacity = 0.6,
-#     opacity = 0.6,
-#     popup = ~popup_content
-#   ) %>% 
-#   leaflet::addLegend(
-#     "bottomright",
-#     colors = c(unique(alert_map$col_palette)),
-#     labels = c(unique(alert_map$detection_method)),
-#     opacity = 0.8
-#   )
-# 
-
-
-## Number of whales avoided
-# no_whales_averted = alert_clean %>% 
-#   dplyr::left_join(
-#     sightings_clean, by = dplyr::join_by(sighting_id == id)
-#   ) 
-# 
-# 
-# x = no_whales_averted %>% 
-#   dplyr::mutate(number_of_animals = 
-#                   dplyr::case_when(stringr::str_detect(number_of_animals, "~") ~ stringr::str_remove(number_of_animals, "~.*"),
-#                                    stringr::str_detect(number_of_animals, "-") ~ "0",
-#                                    TRUE ~ number_of_animals
-#                   )) %>% 
-#   dplyr::filter(is.na(number_of_animals) == F)
-# 
-# sum(as.numeric(x$number_of_animals))
-# 
-# 
-# ## Users
-# 
-# users = readxl::read_xlsx(paste0("C:/Users/", user,
-#                                                  "/Ocean Wise Conservation Association/Whales Initiative - General/BCCSN.Groups/WhaleReport Alert System/Participants/WRASUSERS_main.xlsx"),
-#                                           sheet = "Authorized") %>%
-#   janitor::clean_names() %>% 
-#   dplyr::select(1:12) %>% 
-#   dplyr::mutate(approval_date = as.Date(approval_date)) %>% 
-#   dplyr::group_by(year = lubridate::year(approval_date)) %>% 
-#   dplyr::summarise(count = dplyr::n()) %>% 
-#   dplyr::mutate(cumsum = cumsum(count)) %>% 
-#   dplyr::filter(!year == 2018 & is.na(year) == F) %>% 
-#   dplyr::mutate(
-#     yoy_growth = (cumsum - dplyr::lag(cumsum,1))/dplyr::lag(cumsum,1)*100
-#   ) %>% 
-#   dplyr::filter(is.na(yoy_growth) == F)
-
 
 

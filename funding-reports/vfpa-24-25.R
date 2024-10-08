@@ -24,13 +24,15 @@ period_detections = detections_clean %>%
   dplyr::filter(sighted_at > lubridate::as_date("2024-02-01"))
 
 wras_info = overall_alerts %>% 
-  dplyr::filter(dplyr::between(month, 1,8) & year == 2024) 
+  dplyr::filter(dplyr::between(month, 1,9) & year == 2024) 
 
 #### ~~~~~~~~~~~~~~~~~~~ Plots ~~~~~~~~~~~~~~~~~~~~~~~~~~ ####
 
 ## Map of alerts
 
 alert_map = joined_tables %>%
+  ## EDIT THIS FOR REPORTING PERIOD
+  dplyr::filter(sent_at > as.Date("2024-06-30") & sent_at < as.Date("2024-10-01")) %>% 
   dplyr::filter(lubridate::year(sent_at) == 2024 & !lubridate::month(sent_at) == 1) %>%
   # dplyr::left_join(detections_clean,
   #                  dplyr::join_by(sighting_id == id)) %>%
@@ -38,20 +40,21 @@ alert_map = joined_tables %>%
   dplyr::mutate(col_palette =
                   dplyr::case_when(
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "#A569BD",
-                    stringr::str_detect(source_entity, "Orca Network") == T ~ "#27AE60",
+                    stringr::str_detect(source_entity, "Orca Network|Alaska") == T ~ "#27AE60",
+                    # stringr::str_detect(source_entity, "Alaska") == T ~ "#27AE60",
                     stringr::str_detect(source_entity, "Ocean Wise") == T ~ "#F5B041",
                     stringr::str_detect(source_entity, "JASCO|SMRU") == T ~ "#36648b"
                   )) %>%
   dplyr::mutate(detection_method =
                   dplyr::case_when(
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "Infrared camera",
-                    stringr::str_detect(source_entity, "Orca Network") == T ~ "Partner sightings network",
+                    stringr::str_detect(source_entity, "Orca Network|Alaska") == T ~ "Partner sightings network",
                     stringr::str_detect(source_entity, "Ocean Wise") == T ~ "Whale report app",
                     stringr::str_detect(source_entity, "JASCO|SMRU") == T ~ "Hydrophone"
                   )) %>%
   dplyr::mutate(
     popup_content =
-      paste("<b>Species:</b> ", name,
+      paste("<b>Species:</b> ", species,
             "<b><br>Source:</b> ", source_entity,
             "<b><br>Detection method:</b>", detection_method,
             "<b><br>Date:</b>", as.Date(sent_at)
@@ -100,11 +103,11 @@ wras_info %>%
     mode = "lines",
     line = list(color = "#1f77b4"),  # Blue for WhaleReport
     fill = 'tonexty',
-    fillcolor = '#1f77b43'# Transparent blue for fill
+    fillcolor = '#1f77b42'# Transparent blue for fill
   ) %>%
   plotly::add_trace(
     y = ~`Cumulative SMRU`,
-    name = "SMRU",
+    name = "Lime Kiln",
     type = "scatter",
     mode = "lines",
     line = list(color = "#2ca02c"),  # Green for SMRU
@@ -113,7 +116,7 @@ wras_info %>%
   ) %>%
   plotly::add_trace(
     y = ~`Cumulative JASCO`,
-    name = "JASCO",
+    name = "Boundary Pass",
     type = "scatter",
     mode = "lines",
     line = list(color = "#ff7f0e"),  # Orange for JASCO
@@ -163,7 +166,7 @@ wras_info %>%
                                               color = 'rgb(82, 82, 82)')),
                  legend = list(
                    orientation = "h",        # horizontal legend
-                   xanchor = "center",       # anchor legend at the center
+                   xanchor = "center",       # anchor legend at the centerS
                    x = 0.5,                  # set position to the center (horizontally)
                    y = -0.2                  # move legend below the plot
                  ))
@@ -173,3 +176,27 @@ legend = list(
   x = 0.5,                  # set position to the center (horizontally)
   y = -0.2                  # move legend below the plot
 )
+
+
+## Specific hydrophone visuals
+
+sights %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(c(year_mon, sightigns_jasco = JASCO, sightings_smru = SMRU)) %>% 
+  dplyr::mutate(cum_sightings_smru = cumsum(sightings_smru),
+                cum_sightings_jasco = cumsum(sightigns_jasco),
+                date = lubridate::as_date(year_mon)) %>%
+  dplyr::right_join(wras_info, by = dplyr::join_by(date)) %>% 
+  dplyr::select(date, 
+                sightings_smru, sightigns_jasco, cum_sightings_smru, cum_sightings_jasco,
+                alert_jasco = JASCO, alert_smru = SMRU, cum_alert_jasco = `Cumulative JASCO`, cum_alert_smru =`Cumulative SMRU`) %>% 
+  plotly::plot_ly(x = ~date) %>%
+  plotly::add_lines(y = ~cum_sightings_smru, name = 'Detections Lime Kiln', line = list(color = '#2ca02c')) %>%
+  plotly::add_lines(y = ~cum_sightings_jasco, name = 'Detections Boundary Pass', line = list(color = '#ff7f0e')) %>%
+  plotly::add_lines(y = ~cum_alert_smru, name = 'Alerts Lime Kiln', line = list(color = '#2ca02c', dash = 'dash')) %>%
+  plotly::add_lines(y = ~cum_alert_jasco, name = 'Alerts Boundary Pass', line = list(color = '#ff7f0e', dash = 'dash')) %>%
+  plotly::layout(title = "",
+         xaxis = list(title = ""),
+         yaxis = list(title = ""))
+
+                

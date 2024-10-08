@@ -62,7 +62,7 @@ sights_species = sights_pre %>%
     species_id == 24 ~ "green sea turtle",
     species_id == 25 ~ "olive ridley sea turtle",
     species_id == 26 ~ "loggerhead sea turtle",
-    species_id == 27 ~ "unidentidied sea turtle"
+    species_id == 27 ~ "unidentified sea turtle"
   )) %>% 
   dplyr::group_by(year = lubridate::year(sighted_at), month = lubridate::month(sighted_at), species_id) %>% 
   dplyr::summarise(count = dplyr::n()) %>% 
@@ -123,19 +123,82 @@ plotly::plot_ly(sights_species,
                  ),
                  barmode = "stack")
 
-
-S#### ~~~~~~~~~~~~~~~~~~~ NIGHT VS DAY ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ####
+#### ~~~~~~~~~~~~~~~~~~~ NIGHT VS DAY ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ####
 ## Number of alerts overall
 ## Edit the filter depending on what data source you want. Although may need to be edited to make it look a little nicer when using a longer timeframe... 
+
+## Calculate sunrise and sunset for each date in your dataset
+x = detections_clean %>%
+  dplyr::ungroup() %>% 
+  # dplyr::filter(as.Date(sighted_at) > as.Date("2024/02/01")) %>% 
+  dplyr::filter(source_entity == "SMRUC") %>% 
+  dplyr::mutate(
+    sun_times = suncalc::getSunlightTimes(as.Date(sighted_at),
+                                          lat = 48.51566, 
+                                          lon = -123.1528))
+
+x %>% 
+  dplyr::mutate(sunrise = lubridate::ymd_hms(x$sun_times$sunrise, tz = "UTC") - lubridate::hours(7),
+                sunset = lubridate::ymd_hms(x$sun_times$sunset, tz = "UTC") - lubridate::hours(7)) %>% 
+  dplyr::select(id, sighted_at, latitude, longitude, 
+                species, source_entity, sunrise, sunset) %>% 
+  dplyr::mutate(day_night = 
+                  dplyr::case_when(dplyr::between(sighted_at, sunrise, sunset)  ~ "day",
+                                   TRUE  ~ "night")) %>% 
+  dplyr::group_by(month = lubridate::month(sighted_at),day_night) %>% 
+  dplyr::summarise(count = dplyr::n()) %>% 
+  tidyr::pivot_wider(
+    names_from = day_night,
+    values_from = count
+  ) %>% 
+  dplyr::mutate(month_name = factor(month.name[month], levels = month.name)) %>% 
+  plotly::plot_ly(
+    x = ~month_name,
+    y = ~day,
+    type = "bar",
+    name = "Daylight hours",
+    marker = list(color = "#F2B949") 
+  ) %>% 
+  plotly::add_trace(
+    y = ~night,
+    name = "Outside daylight\n hours",
+    marker = list(color = "#6449F2")
+  ) %>% 
+  plotly::layout(xaxis = list(title = "",
+                              showline = TRUE,
+                              showgrid = FALSE,
+                              showticklabels = TRUE,
+                              linecolor = 'rgb(204, 204, 204)',
+                              linewidth = 2,
+                              autotick = T,
+                              ticks = 'outside',
+                              tickcolor = 'rgb(204, 204, 204)',
+                              tickwidth = 2,
+                              ticklength = 5,
+                              tickfont = list(family = 'Arial',
+                                              size = 16,
+                                              color = 'rgb(82, 82, 82)')),
+                 yaxis = list(title = list(text='No. detections', font = list(size = 16, family = 'Arial'), standoff = 25),
+                              showgrid = FALSE,
+                              zeroline = FALSE,
+                              showline = FALSE,
+                              showticklabels = T,
+                              tickfont = list(family = 'Arial',
+                                              size = 16,
+                                              color = 'rgb(82, 82, 82)')),
+                 barmode = "stack")
+  
+
 
 vfpa_data = joined_tables %>% dplyr::filter(source_entity == "SMRUC") %>% 
   dplyr::mutate(day_night = 
                    dplyr::case_when(
-                     dplyr::between(lubridate::hour(sent_at), 6, 20) ~ "day",
+                     dplyr::between(lubridate::date(sent_at), as.Date(2024-02-01),
+                       dplyr::between(lubridate::hour(sent_at), 6, 20) ~ "day",
                      dplyr::between(lubridate::hour(sent_at), 21, 5) ~ "night")
       # lubridate::hour(sent_at) >= 6 & lubridate::hour(sent_at) <= 21 ~ "day",
       # lubridate::hour(sent_at) <= 5 & lubridate::hour(sent_at) >= 22 ~ "night"
-      ) %>% 
+      )) %>% 
   dplyr::mutate(day_night = tidyr::replace_na(day_night, "night")) %>% 
   dplyr::select(
     c(id, tracking_id, sighting_id, created_at, sent_at, sighted_at, day_night)
@@ -191,8 +254,34 @@ vfpa_data = joined_tables %>% dplyr::filter(source_entity == "SMRUC") %>%
 
 #### ~~~~~~~~~~~ Alerts ~~~~~~~~~~~ ####
 
+alert_prop = overall_alerts %>% 
+  dplyr::filter(date > as.Date("2022-03-01") & date < as.Date("2024-04-01")) %>% 
+  dplyr::select(1:9) %>% 
+  dplyr::ungroup() %>% 
+  tidyr::pivot_longer(cols = `Ocean Wise`:`Whale Alert Alaska`,
+               names_to = "source",
+               values_to = "count") %>% 
+  dplyr::group_by(source) %>%
+  dplyr::summarise(total_count = sum(count)) %>%
+  dplyr::mutate(proportion = total_count / sum(total_count))
+
+
+
+
+ggplot(alert_prop, aes(x = proportion, y = 1, fill = source)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(x = NULL, y = "Proportion", fill = "Source",
+       title = "Proportion of Data from Each Source") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), # Remove x-axis text
+        axis.ticks.x = element_blank(), # Remove x-axis ticks
+        axis.title.x = element_blank()) # Remove x-axis title
+
+
+###
 alert_bar = overall_alerts %>% 
-  dplyr::filter(year == 2024) %>% 
+  # dplyr::filter(year == 2024) %>% 
   dplyr::ungroup() %>% 
   janitor::clean_names() %>% 
   dplyr::select(c(date, dplyr::contains("cumulative"))) %>%
@@ -321,18 +410,28 @@ users_overall = readxl::read_xlsx(
   janitor::clean_names()
   
 users_cumulative = users_overall %>% 
+  dplyr::filter(region_clean == "USA") %>% 
   dplyr::group_by(year_qtr = zoo::as.yearqtr(approval_date), org_type) %>%
   dplyr::summarise(count = dplyr::n()) %>% 
   dplyr::group_by(org_type) %>% 
   dplyr::mutate(cum_count = cumsum(count)) %>% 
   dplyr::select(-count) %>% 
   tidyr::pivot_wider(names_from = org_type,
-                     values_from = cum_count) %>% 
+                     values_from = cum_count) 
+
+dates = seq(from = floor(min(users_cumulative$year_qtr)),
+            to = max(users_cumulative$year_qtr),
+            by = 1/4) %>% 
+  tibble::as_tibble(.)
+
+users_cumulative = dates %>% 
+  dplyr::left_join(users_cumulative, by = dplyr::join_by(value == year_qtr)) %>% 
   tidyr::fill(`Marine Pilots`, Ferries, 
               Enforcement, Government, 
               Industry, Guardians, Developer,
               `Port Authorities`, Research,
               `Tug and Tow`, .direction = "down") %>% 
+  dplyr::rename(year_qtr = value) %>% 
   dplyr::mutate(dplyr::across(.cols = 2:11, ~tidyr::replace_na(.x,0))) 
   
 users_cumulative_total = 
@@ -478,7 +577,7 @@ users_cumulative %>%
 
  ## Sightings
 sight_map = sightings_clean %>%
- dplyr::filter(lubridate::year(date) == 2024 & dplyr::between(lubridate::month(date), 7,8 )) %>%
+ dplyr::filter(lubridate::year(date) == 2024 & dplyr::between(lubridate::month(date), 1,9 )) %>%
  dplyr::mutate(species = 
                  dplyr::case_when(
                    stringr::str_detect(species, "dolphin") ~ "Dolphin/Porpoise species",
@@ -538,7 +637,7 @@ sight_map %>%
 ## Alerts
 
 alert_map = joined_tables %>%
-  dplyr::filter(lubridate::year(sent_at) == 2024 & dplyr::between(lubridate::month(sent_at), 7,8 )) %>%
+  dplyr::filter(lubridate::year(sent_at) == 2024 & dplyr::between(lubridate::month(sent_at), 1,9 )) %>%
   dplyr::mutate(col_palette =
                   dplyr::case_when(
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "#A569BD",
@@ -567,12 +666,13 @@ alert_map = joined_tables %>%
 
 
 alert_map %>%
+  dplyr::filter(detection_method == "Orca Network" | detection_method == "Whale Alert") %>% 
   leaflet::leaflet() %>%
   leaflet::addTiles(urlTemplate = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png") %>%
   leaflet::addCircleMarkers(
     lng = ~longitude,
     lat = ~latitude,
-    radius = 3,
+    radius = 1,
     color = ~col_palette,
     fillOpacity = 0.6,
     opacity = 0.6,
@@ -582,7 +682,11 @@ alert_map %>%
     "bottomright",
     colors = c(unique(alert_map$col_palette)),
     labels = c(unique(alert_map$detection_method)),
-    opacity = 0.8)
+    opacity = 0.8) %>% 
+  leaflet::leafletOptions(zoomSnap = 0.1,  # Change zoom steps to finer intervals (0.5)
+                 zoomDelta = 0.1)  # Change zoom increments to 0.5
+
+
   # ) %>% 
   # htmltools::save_html(., paste0("C:/Users/", 
   #                                user, 
@@ -609,31 +713,50 @@ leaflet::leaflet(alert_map) %>%
                                  ".html"))
 
 
-# # Extract the last row and reshape the data into long format
-# prop_wras <- wras_info %>% 
-#   dplyr::slice(dplyr::n()) %>% 
-#   dplyr::select(-year, -month, -total) %>%
-#   tidyr::pivot_longer(cols = dplyr::everything(), 
-#                       names_to = "category", 
-#                       values_to = "count") %>% 
-#   dplyr::mutate(proportion = count / sum(count),
-#                 category = forcats::fct_reorder(category, proportion, .desc = F))
-# 
-# # Create the stacked bar chart
-# library(ggplot2)
-# ggplot(prop_wras, aes(x = proportion, y = "", fill = category)) +
-#   geom_bar(stat = "identity", width = 0.5) +
-#   # coord_polar(theta = "y") + ## This makes the plot a banned pie chart.
-#   labs(title = "",
-#        x = NULL, y = NULL) +
-#   scale_fill_brewer(palette = "Dark2") +
-#   scale_x_continuous(labels = scales::percent_format()) +
-#   theme_minimal() +
-#   theme(plot.title = element_text(hjust = 0.5),
-#         legend.title = element_blank(),
-#         panel.grid.major.y = element_blank(),
-#         panel.grid.minor.x = element_blank())
-# 
+## Detections map - not alert map 
+
+detections_clean %>% 
+  dplyr::mutate(source_entity =
+                  dplyr::case_when(
+                    is.na(source_entity) == T ~ "Ocean Wise",
+                    stringr::str_detect(source_entity, "Ocean Wise") == T ~ "Ocean Wise",
+                    stringr::str_detect(source_entity, "Acartia") == T ~ "Orca Network",
+                    stringr::str_detect(source_entity, "Orca Network") == T ~ "Orca Network",
+                    stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
+                    stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
+                    stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
+                    stringr::str_detect(source_entity, "Whale Alert") == T ~ "Whale Alert",
+                    TRUE ~ source_entity)) %>% 
+  dplyr::mutate(col_palette =
+                  dplyr::case_when(
+                    stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "#A569BD",
+                    stringr::str_detect(source_entity, "Orca Network") == T ~ "#27AE60",
+                    stringr::str_detect(source_entity, "Ocean Wise") == T ~ "#F5B041",
+                    stringr::str_detect(source_entity, "JASCO") == T ~ "#17202A",
+                    stringr::str_detect(source_entity, "SMRU") == T ~ "#17202A",
+                    stringr::str_detect(source_entity, "Whale Alert") == T ~ "#2b547e"
+                  )) %>%
+  dplyr::filter(source_entity == "Orca Network" | source_entity == "Whale Alert") %>% 
+  leaflet::leaflet() %>%
+  leaflet::addTiles() %>%
+  leaflet::addCircleMarkers(
+    lng = ~longitude,
+    lat = ~latitude,
+    radius = 2,
+    group = ~source_entity,
+    color = ~col_palette,
+    fillOpacity = 0.8,
+    opacity = 0.8
+  ) %>%
+  leaflet::addLegend(
+    "bottomright",
+    colors = ~unique(col_palette),
+    labels = ~unique(source_entity),
+    opacity = 0.8) %>% 
+  leaflet::leafletOptions(zoomSnap = 0.1,  # Change zoom steps to finer intervals (0.5)
+                          zoomDelta = 0.1)
+  
+
 
 
 
