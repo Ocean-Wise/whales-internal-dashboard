@@ -666,7 +666,7 @@ alert_map = joined_tables %>%
 
 
 alert_map %>%
-  dplyr::filter(detection_method == "Orca Network" | detection_method == "Whale Alert") %>% 
+  # dplyr::filter(detection_method == "Orca Network" | detection_method == "Whale Alert") %>% 
   leaflet::leaflet() %>%
   leaflet::addTiles(urlTemplate = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png") %>%
   leaflet::addCircleMarkers(
