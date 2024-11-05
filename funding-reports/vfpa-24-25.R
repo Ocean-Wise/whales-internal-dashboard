@@ -26,6 +26,7 @@ period_detections = detections_clean %>%
 wras_info = overall_alerts %>% 
   dplyr::filter(dplyr::between(month, 1,9) & year == 2024) 
 
+
 #### ~~~~~~~~~~~~~~~~~~~ Plots ~~~~~~~~~~~~~~~~~~~~~~~~~~ ####
 
 ## Map of alerts

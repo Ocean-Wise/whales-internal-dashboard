@@ -11,7 +11,7 @@
 ## "user" 
 library(magrittr)
 
-# user = "AlexMitchell"
+user = "AlexMitchell"
 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Import~~~~~~~~~~~~~~~~~~~~~~~####
 
@@ -19,64 +19,71 @@ library(magrittr)
 
 ## Basic params
 # base_url = "https://sightingsapi.ocean.org/sightings"
-# 
 # api_key = "rkcAx0oi7F9O0S7ZOOb482PMePhVCrk55jxpB60G"
 # 
 # params = list(
 #   api_key = api_key,
-#   limit = 10,
+#   limit = 100,
 #   page = 1,
 #   sourceType = "autonomous"
 # )
-# 
-# # function to query API
+# ## function to query API
 # fetch_data <- function(base_url, params) {
-#   response <- httr::GET(url = base_url, query = params, httr::add_headers(`x-api-key` = api_key))
-#   content <- httr::content(response, as = "parsed")
-#   data <- content$sightings
+#    response <- httr::GET(url = base_url, query = params, httr::add_headers(`x-api-key` = api_key))
+#    content <- httr::content(response, as = "parsed")
+#    data <- content$sightings
+#    return(data)
+#  }
 # 
-#   return(data)
-# }
+# flatten_record <- function(record) {
+#    record$additionalProperties <- NULL
+#    purrr::list_flatten(record)
+#  }
 # 
-# all_data <- list()
+#  all_data <- list()
 # 
-# repeat {
-#   data <- fetch_data(base_url, params)
+#  repeat {
+#    data = fetch_data(base_url, params)
 # 
-#   # if (params$page == 10) {
-#   #   break
-#   # }
+#    data_df = purrr::map(data, flatten_record) %>%
+#      dplyr::bind_rows()
 # 
-#   if (length(data) == 0) {
-#     break
-#   }
+#    # if (params$page == 10) {
+#    #   break
+#    # }
 # 
-#   all_data <- append(all_data, list(data))
+#    if (length(data) == 0) {
+#      break
+#    }
 # 
-#   params$page = params$page + 1
-# }
+#    all_data <- dplyr::bind_rows(all_data, data_df)
 # 
-# combined_data = dplyr::bind_rows(all_data) %>%
-#   dplyr::distinct() %>%
-#   janitor::clean_names()
+#    params$page = params$page + 1
+#  }
+# 
+#  flattened_data = purrr::map(all_data, function(record) {
+#    # Convert each record (nested list) into a tibble
+#    tibble::as_tibble(record)
+#  })
+# 
+# combined_data = all_data %>%
+#    dplyr::distinct() %>%
+#    janitor::clean_names()
+# 
+#  x = combined_data %>%
+#    dplyr::mutate(date_received == date_received) %>%
+#    dplyr::filter(
+#        !stringr::str_detect(location_desc, "(?i)test")) %>%
+#    dplyr::filter(
+#        !stringr::str_detect(source_entity, "(?i)test")) %>%
+#    dplyr::filter(
+#        !stringr::str_detect(reporter_email, "(?i)test")
+#        )
+#  dplyr::filter(
+#    !stringr::str_detect(reporter_email, "(?i)test")
+#  )
 
-# 
-# x = combined_data %>% 
-#   dplyr::mutate(date_received == date_received) %>%
-#   dplyr::filter(
-#     !stringr::str_detect(comments, "(?i)test")) %>%
-#   dplyr::filter(
-#       !stringr::str_detect(location_desc, "(?i)test")) %>% 
-#   dplyr::filter(
-#       !stringr::str_detect(source_entity, "(?i)test")) %>% 
-#   dplyr::filter(
-#       !stringr::str_detect(reporter_email, "(?i)test")
-#       ) 
-# dplyr::filter(
-#   !stringr::str_detect(reporter_email, "(?i)test")
-# )
-
-
+ 
 ## Get a list of files in the directory which we want to get the data from. It is important that older files are overwritten, not added. 
 file_list = list.files(paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/"), full.names = T) %>% 
   .[. != paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/historical_data")]
@@ -109,9 +116,9 @@ sightings_spreadsheet = readxl::read_xlsx(paste0("C:/Users/", user,
 
 ## alert cleaning
 alert_clean = alert_historic %>% 
-  dplyr::bind_rows(
-    dplyr::anti_join(alert_raw, alert_historic)) %>% 
-  dplyr::select(-location_id)
+  dplyr::bind_rows(alert_raw) %>% 
+  dplyr::select(-location_id) %>% 
+  dplyr::distinct()
 
   
 ## sightings spreadsheet cleaning
@@ -126,17 +133,12 @@ sightings_clean = sightings_spreadsheet %>%
   dplyr::select(-time)
 
 
-
-
-
 ## Detection cleaning
-detection_historic = detection_historic %>% 
-  dplyr::mutate(sighted_at = lubridate::ymd_hm(detection_historic$sighted_at),
-                created_at = lubridate::ymd_hm(detection_historic$created_at))
-
 detections_clean = detection_historic %>% 
+  dplyr::mutate(sighted_at = lubridate::ymd_hm(detection_historic$sighted_at),
+                created_at = lubridate::ymd_hm(detection_historic$created_at)) %>%
     dplyr::bind_rows(
-      dplyr::anti_join(detection_recent, detection_historic)
+      dplyr::anti_join(detection_recent, .)
     ) %>% 
   dplyr::mutate(details = stringr::str_remove_all(details, "[\\\\\"{}]")) %>% 
   dplyr::mutate(details = stringr::str_remove(details, "^[^:]+:")) %>% 
@@ -152,6 +154,7 @@ detections_clean = detection_historic %>%
   dplyr::mutate(colname = stringr::str_trim(colname)) %>% 
   dplyr::group_by(id) %>% 
   dplyr::mutate(dplyr::across(where(is.character), ~ dplyr::na_if(., ""))) %>% 
+  # dplyr::select(-c("category", "direction")) %>% 
   tidyr::pivot_wider(names_from = colname, values_from = data) %>% 
   janitor::clean_names() %>% 
   janitor::remove_empty(which = "cols")

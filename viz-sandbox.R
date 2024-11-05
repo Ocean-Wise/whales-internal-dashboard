@@ -18,13 +18,14 @@
 
 ## All real-time sightings, not just sightings that led to alerts
 
-sights_props = sights %>% 
+sights_props = sights %>%
+  dplyr::select(-year) %>% 
   tidyr::pivot_longer(
     !year_mon,
     names_to = "source",
     values_to = "count"
   ) %>% 
-  dplyr::filter(year_mon != "Aug 2024", source != "Whale Alert Alaska") %>% 
+  # dplyr::filter(year_mon != "Aug 2024", source != "Whale Alert Alaska") %>% 
   dplyr::group_by(year = lubridate::year(year_mon), source) %>% 
   dplyr::summarise(count = sum(count)) %>% 
   dplyr::filter(year == 2024)
@@ -255,10 +256,10 @@ vfpa_data = joined_tables %>% dplyr::filter(source_entity == "SMRUC") %>%
 #### ~~~~~~~~~~~ Alerts ~~~~~~~~~~~ ####
 
 alert_prop = overall_alerts %>% 
-  dplyr::filter(date > as.Date("2022-03-01") & date < as.Date("2024-04-01")) %>% 
+  dplyr::filter(date > as.Date("2022-03-01") & date < Sys.Date()) %>% 
   dplyr::select(1:9) %>% 
   dplyr::ungroup() %>% 
-  tidyr::pivot_longer(cols = `Ocean Wise`:`Whale Alert Alaska`,
+  tidyr::pivot_longer(cols = `Ocean Wise`:`Whale Alert`,
                names_to = "source",
                values_to = "count") %>% 
   dplyr::group_by(source) %>%
@@ -266,7 +267,7 @@ alert_prop = overall_alerts %>%
   dplyr::mutate(proportion = total_count / sum(total_count))
 
 
-
+library(ggplot2)
 
 ggplot(alert_prop, aes(x = proportion, y = 1, fill = source)) +
   geom_bar(stat = "identity") +
@@ -398,8 +399,88 @@ overall_alerts %>%
                    y = -0.1                  # move legend below the plot
                  ))
 
+## Line graph of alerts
 
-#### ~~~~~~~~~~~ USER GROWTH ~~~~~~~~~~~ ####
+overall_alerts %>% 
+  dplyr::filter(dplyr::between(month, 1,9) & year == 2024)  %>%
+  plotly::plot_ly(
+    y = ~`Cumulative Ocean Wise`,
+    x = ~date,
+    name = "WhaleReport",
+    type = "scatter",
+    mode = "lines",
+    line = list(color = "#1f77b4"),  # Blue for WhaleReport
+    fill = 'tonexty',
+    fillcolor = '#1f77b42'# Transparent blue for fill
+  ) %>%
+  plotly::add_trace(
+    y = ~`Cumulative SMRU`,
+    name = "Lime Kiln",
+    type = "scatter",
+    mode = "lines",
+    line = list(color = "#2ca02c"),  # Green for SMRU
+    fill = 'tonexty',
+    fillcolor = 'rgba(44, 160, 44, 0.3)' # Transparent green for fill
+  ) %>%
+  plotly::add_trace(
+    y = ~`Cumulative JASCO`,
+    name = "Boundary Pass",
+    type = "scatter",
+    mode = "lines",
+    line = list(color = "#ff7f0e"),  # Orange for JASCO
+    fill = 'tonexty',
+    fillcolor = 'rgba(255, 127, 14, 0.3)' # Transparent orange for fill
+  ) %>%
+  plotly::add_trace(
+    y = ~`Cumulative Orca Network`,
+    name = "Partner Sightings Network",
+    type = "scatter",
+    mode = "lines",
+    line = list(color = "#d62728"),  # Red for Partner Sightings Network
+    fill = 'tonexty',
+    fillcolor = 'rgba(214, 39, 40, 0.3)' # Transparent red for fill
+  ) %>%
+  plotly::add_trace(
+    y = ~`Cumulative WhaleSpotter`,
+    name = "IR Camera",
+    type = "scatter",
+    mode = "lines",
+    line = list(color = "#9467bd"),  # Purple for IR Camera
+    fill = 'tonexty',
+    fillcolor = 'rgba(148, 103, 189, 0.3)' # Transparent purple for fill
+  ) %>%
+  plotly::layout(xaxis = list(title = "",
+                              showline = TRUE,
+                              showgrid = FALSE,
+                              showticklabels = TRUE,
+                              linecolor = 'rgb(204, 204, 204)',
+                              linewidth = 2,
+                              ticks = 'outside',
+                              tickcolor = 'rgb(204, 204, 204)',
+                              tickwidth = 2,
+                              ticklength = 5,
+                              # tickformat="%b %Y",
+                              ticktext = format("%b %Y"),
+                              dtick = "M1",
+                              tickfont = list(family = 'Arial',
+                                              size = 16,
+                                              color = 'rgb(82, 82, 82)')),
+                 yaxis = list(title = "",
+                              showgrid = T,
+                              zeroline = FALSE,
+                              showline = FALSE,
+                              tickfont = list(family = 'Arial',
+                                              size = 16,
+                                              color = 'rgb(82, 82, 82)')),
+                 legend = list(
+                   orientation = "h",        # horizontal legend
+                   xanchor = "center",       # anchor legend at the centerS
+                   x = 0.5,                  # set position to the center (horizontally)
+                   y = -0.2                  # move legend below the plot
+                 ))
+
+
+SSS#### ~~~~~~~~~~~ USER GROWTH ~~~~~~~~~~~ ####
 
 ### IMPORT DATA ###
 
@@ -573,7 +654,7 @@ users_cumulative %>%
   
 
 
- ####~~~~~~~~~~~~~~~~~~~~~~~~~~~ Mapping ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
+ SS####~~~~~~~~~~~~~~~~~~~~~~~~~~~ Mapping ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 
  ## Sightings
 sight_map = sightings_clean %>%
@@ -645,7 +726,7 @@ alert_map = joined_tables %>%
                     stringr::str_detect(source_entity, "Ocean Wise") == T ~ "#F5B041",
                     stringr::str_detect(source_entity, "JASCO") == T ~ "#17202A",
                     stringr::str_detect(source_entity, "SMRU") == T ~ "#17202A",
-                    stringr::str_detect(source_entity, "Whale Alert Alaska") == T ~ "#2b547e"
+                    stringr::str_detect(source_entity, "Whale Alert") == T ~ "#2b547e"
                   )) %>%
   dplyr::mutate(detection_method =
                   dplyr::case_when(
@@ -697,20 +778,23 @@ alert_map %>%
   
 
 ## Heat map
-leaflet::leaflet(alert_map) %>% 
-  leaflet::addTiles(urlTemplate = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png") %>%
+leaflet::leaflet(alert_map, 
+                 options = leaflet::leafletOptions(zoomDelta = 0.1, zoomSnap = 0.1)) %>% 
+  # leaflet::addTiles(urlTemplate = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png") %>%
+  leaflet::addProviderTiles("CartoDB.Positron") %>%
   leaflet.extras::addHeatmap(
     lng = ~longitude,
     lat = ~latitude,
-    blur = 10, 
-    max = 0.7, 
-    radius = 20) %>% 
-  htmltools::save_html(., paste0("C:/Users/", 
-                                 user, 
-                                 "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/",
-                                 "heat-map-",
-                                 Sys.Date(),
-                                 ".html"))
+    blur = 5, 
+    max = 0.2, 
+    radius = 5) 
+# %>% 
+#   htmltools::save_html(., paste0("C:/Users/", 
+#                                  user, 
+#                                  "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/",
+#                                  "heat-map-",
+#                                  Sys.Date(),
+#                                  ".html"))
 
 
 ## Detections map - not alert map 
@@ -758,7 +842,24 @@ detections_clean %>%
   
 
 
+## Where are the sightings vs what sightings led to alerts? 
 
+
+x = detections_clean %>% 
+  dplyr::left_join(joined_tables, by = dplyr::join_by(id == sighting_id)) %>% 
+  dplyr::mutate(flagged = ifelse(!is.na(auth_id), TRUE, FALSE)) %>% 
+  dplyr::select(c(id, flagged)) %>% 
+  dplyr::distinct() %>% 
+  dplyr::left_join(detections_clean) %>% 
+  dplyr::filter(lubridate::year(sighted_at) == 2024) %>% 
+  leaflet::leaflet(.) %>%
+  leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>%
+  leaflet::addCircleMarkers(
+    lng = ~longitude,
+    lat = ~latitude,
+    color = ~ifelse(flagged, "#A8007E", "#AAAC24"),
+    radius = 2
+  )
 
 
 

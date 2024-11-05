@@ -51,7 +51,30 @@ joined_tables = alert_clean %>%
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
                     stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
                     stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
-                    TRUE ~ source_entity))
+                    stringr::str_detect(source_entity, "Whale Alert") == T ~ "Whale Alert",
+                    TRUE ~ source_entity)) %>% 
+  dplyr::distinct()
+
+## Create a filter to remove users who may be inflating the alert numbers - SIMRES / SMRU testers etc
+# joined_tables %>% 
+#   dplyr::group_by(tracking_id)%>% 
+#   dplyr::summarise(count = dplyr::n()) %>% 
+#   dplyr::left_join(user_clean, by = dplyr::join_by(tracking_id)) %>% 
+#   dplyr::arrange(desc(count)) %>% 
+#   head(.,20,30)
+
+## Filter
+ignore_ids = 
+  c(
+    "auth0|6594b4cf033bf133ad3699cd", # Kathleen Durant - Tester SIMRES
+    "auth0|668f2121ac3a7fb4523c3154", # Sam Tubbut - SMRU
+    "auth0|60bea9676b3a6b00710e23dc", # Pauline Preston - Tester SIMRES
+    "auth0|6594b52f8d750bdc3986a74e", # Chris Genovali - Tester SIMRES
+    "auth0|62ec568fa194be1ada460ea8", # Jason Wood - SMRU
+    "auth0|668469f2caa4d91f1f939ecf", # Paul King - SMRU
+    "auth0|61d60319deb6b60069830256", # Patrick Gallagher
+    "auth0|65fe005349ddc30bde015041" # Emma Laqua - Ocean Wise
+  )
 
 ## EXTRA STEP AS LAPIS MESSED UP THE DB. - this will take information from sightings spreadsheet and populate missing sightings data for alerts
 interim_sightings = sightings_clean %>% 
@@ -81,21 +104,22 @@ interim_1 = interim_1 %>% dplyr::left_join(
 
 ## Missing 91 lat lons from 2024 data, 1 from 2023, and 556 from 2019-2021
 
-joined_tables = dplyr::bind_rows(interim_1, interim_2)
+joined_tables = dplyr::bind_rows(interim_1, interim_2) %>%
+  dplyr::filter(!auth_id %in% ignore_ids)
 
 # still a few NAs in lat but I just will have to filter these out. 
 
 overall_alerts = joined_tables %>% 
+  dplyr::distinct() %>% 
   dplyr::group_by(
     year = lubridate::year(sent_at), 
     month = lubridate::month(sent_at),
     source = source_entity
     ) %>% 
-  # dplyr::filter(month > 1) %>%
   dplyr::summarise(
     count = dplyr::n()) %>% 
-  # dplyr::filter(
-  #   year == 2023 | year == 2024) %>% 
+  dplyr::filter(
+    year == 2023 | year == 2024) %>%
   dplyr::mutate(date = lubridate::as_date(paste0(year,"/",month,"/01"))) %>% 
   tidyr::pivot_wider(
     names_from = source,
@@ -112,8 +136,8 @@ overall_alerts = joined_tables %>%
     `Cumulative WhaleSpotter` = cumsum(`WhaleSpotter`),
     `Cumulative JASCO` = cumsum(JASCO),
     `Cumulative SMRU` = cumsum(SMRU),
-    `Cumulative Whale Alert` = cumsum(`Whale Alert Alaska`),
-    Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU + `Whale Alert Alaska`)
+    `Cumulative Whale Alert` = cumsum(`Whale Alert`),
+    Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU + `Whale Alert`)
   ) %>% 
   dplyr::mutate(
     `Ocean Wise %` = (`Cumulative Ocean Wise`/Total)*100,
@@ -157,37 +181,51 @@ sights_pre = detections_clean %>%
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
                     stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
                     stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
-                    TRUE ~ source_entity)) 
+                    TRUE ~ source_entity)) %>%  
+  dplyr::ungroup() %>% 
+  dplyr::select(-c(created_at, id, code)) %>%  # do this to remove errors caused by bugs which led to duplicates sent at same time with different
+  dplyr::distinct()                             # created_at values
 
 
 sights = sights_pre %>%  
-  dplyr::group_by(year_mon = zoo::as.yearmon(detections_clean$sighted_at), source_entity) %>% 
+  dplyr::group_by(year_mon = zoo::as.yearmon(sighted_at), source_entity) %>% 
   dplyr::summarise(n = dplyr::n()) %>%
   tidyr::pivot_wider(names_from = source_entity,
                      values_from = n) %>% 
   dplyr::mutate(dplyr::across(dplyr::everything(), ~tidyr::replace_na(.x, 0))) %>% 
   dplyr::select(-c(`TEST - PLEASE IGNORE`, string)) %>% 
-  dplyr::filter(lubridate::year(year_mon) != 2019)
+  dplyr::filter(lubridate::year(year_mon) != 2019) %>% 
+  dplyr::group_by(year = lubridate::year(year_mon)) %>% 
+  dplyr::mutate(
+    `Cumulative Ocean Wise` = cumsum(`Ocean Wise`),
+    `Cumulative Orca Network` = cumsum(`Orca Network`),
+    `Cumulative WhaleSpotter` = cumsum(`WhaleSpotter`),
+    `Cumulative JASCO` = cumsum(JASCO),
+    `Cumulative SMRU` = cumsum(SMRU),
+    `Cumulative BCHN/SWAG` = cumsum(`BCHN/SWAG`),
+    `Cumulative Whale Alert` = cumsum(`Whale Alert Alaska`),
+    Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU + `Whale Alert Alaska`))
 
+sights
 
 #### ~~~~~~~~~~~~~~~~ Where are the automated detection methods? ~~~~~~~~~~~~~~~~~~~~~~~ ####
-# 
+
 # locations = tibble::tibble(
 #   station_name = c("Fin Island", "Lime Kiln", "Boundary Pass", "Carmanah Lighthouse", "Active Pass North", "Active Pass South", "Saturna Island"),
 #   station_type = c("hydrophone", "hydrophone","hydrophone","infrared camera","infrared camera","infrared camera","infrared camera"),
 #   latitude = c(53.211, 48.515834, 48.773653, 48.611406, 48.877781, 48.857528, 48.792393),
 #   longitude = c(-129.498, -123.152978,  -123.042226, -124.751156, -123.316408, -123.344047, -123.096821))
-# # 
-# # 
+# #
+# #
 # # ## Map of locations with icons
-# # 
+# #
 # icon_list = leaflet::iconList(
 #   "hydrophone" = leaflet::makeIcon(iconUrl = "./../../../Downloads/Picture4.png", iconWidth = 60, iconHeight = 60),
 #   "infrared camera" = leaflet::makeIcon(iconUrl = "./../../../Downloads/Picture3.png", iconWidth = 38, iconHeight = 38)
 # )
-# # 
-# locations %>% 
-#   dplyr::filter(station_type == "infrared camera") %>% 
+# #
+# locations %>%
+#   dplyr::filter(station_type == "infrared camera") %>%
 #   leaflet::leaflet() %>%
 #   leaflet::addTiles() %>%
 #   leaflet::addMarkers(
@@ -200,7 +238,7 @@ sights = sights_pre %>%
 #   #                   leaflet::titleOpts = list(textsize = "24px", textOnly = TRUE)) %>%
 #   leaflet::addMiniMap(toggleDisplay = TRUE) %>%
 #   leaflet::setView(lng = -123.1207, lat = 49.2827, zoom = 6)
-# 
+# # 
 
 ####~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Sandbox ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 
