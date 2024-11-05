@@ -1,245 +1,309 @@
-
-####~~~~~~~~~~~~~~~~~~~~~~Monthly Dashboard Metrics~~~~~~~~~~~~~~~~~~~~~~~####
+####~~~~~~~~~~~~~~~~~~~~~~Cleaning WRAS data~~~~~~~~~~~~~~~~~~~~~~~####
 ## Author: Alex Mitchell
-## Purpose: To automate the production of metrics for the ELT dashboard. Should be able to be run by anyone in the team.
-## Date written: 2024-01-19
+## Purpose: To automate the cleaning of sightings network data as far as possible to be used in future
+##          analysis for reporting, monthly dashboard etc.
+## Date written: 2023-12-21
+## Date updated: 2024-09-16
 ## Quality Assured: No
 
 ####~~~~~~~~~~~~~~~~~~~~~~Info~~~~~~~~~~~~~~~~~~~~~~~####
-## WILL REQUIRE DYLAN OR ALEX TO PULL DATA FROM THE DATABASE FIRST AND STORE IN SP. SEE FILE PATHS FOR INFO IN DATA LOADING.
-## For this script to work you should...
-##      1. Link up to the GitHub repo and pull the project. 
-##      2. Open the project
-
-## What data views do we want to see?
-##    - number of alerts sent
-##      - infrared, other data providers, hydrophones
-##    - cumulative monthly split per year
-##    - growth
-
-
-
-##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
-
-## Run this section first
+## Currently not able to automate this data process, so to download the data, ensure to change the
+## "user" 
 library(magrittr)
 
-## UPDATE THIS TO YOUR USERNAME 
 user = "AlexMitchell"
 
-source(file = "./data-processing.R")
+####~~~~~~~~~~~~~~~~~~~~~~Data Import~~~~~~~~~~~~~~~~~~~~~~~####
+
+## API query to get sightings data from the sightings database without downloading the whole dataset... 
+
+## Basic params
+# base_url = "https://sightingsapi.ocean.org/sightings"
+# api_key = "rkcAx0oi7F9O0S7ZOOb482PMePhVCrk55jxpB60G"
+# 
+# params = list(
+#   api_key = api_key,
+#   limit = 100,
+#   page = 1,
+#   sourceType = "autonomous"
+# )
+# ## function to query API
+# fetch_data <- function(base_url, params) {
+#    response <- httr::GET(url = base_url, query = params, httr::add_headers(`x-api-key` = api_key))
+#    content <- httr::content(response, as = "parsed")
+#    data <- content$sightings
+#    return(data)
+#  }
+# 
+# flatten_record <- function(record) {
+#    record$additionalProperties <- NULL
+#    purrr::list_flatten(record)
+#  }
+# 
+#  all_data <- list()
+# 
+#  repeat {
+#    data = fetch_data(base_url, params)
+# 
+#    data_df = purrr::map(data, flatten_record) %>%
+#      dplyr::bind_rows()
+# 
+#    # if (params$page == 10) {
+#    #   break
+#    # }
+# 
+#    if (length(data) == 0) {
+#      break
+#    }
+# 
+#    all_data <- dplyr::bind_rows(all_data, data_df)
+# 
+#    params$page = params$page + 1
+#  }
+# 
+#  flattened_data = purrr::map(all_data, function(record) {
+#    # Convert each record (nested list) into a tibble
+#    tibble::as_tibble(record)
+#  })
+# 
+# combined_data = all_data %>%
+#    dplyr::distinct() %>%
+#    janitor::clean_names()
+# 
+#  x = combined_data %>%
+#    dplyr::mutate(date_received == date_received) %>%
+#    dplyr::filter(
+#        !stringr::str_detect(location_desc, "(?i)test")) %>%
+#    dplyr::filter(
+#        !stringr::str_detect(source_entity, "(?i)test")) %>%
+#    dplyr::filter(
+#        !stringr::str_detect(reporter_email, "(?i)test")
+#        )
+#  dplyr::filter(
+#    !stringr::str_detect(reporter_email, "(?i)test")
+#  )
 
 
-####~~~~~~~~~~~~~~~~~~~~~~# WRAS alerts vs 2023~~~~~~~~~~~~~~~~~~~~~~~####
-### Goal...
-## Send a total of 15,000 WRAS alerts (at least a 10% increase from 2023 baseline) in BC and WA waters to reduce 
-## the risk of ship strike for at least 15,000 encounters with whales
+## Get a list of files in the directory which we want to get the data from. It is important that older files are overwritten, not added. 
+file_list = list.files(paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/"), full.names = T) %>% 
+  .[. != paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/historical_data")]
 
 
-## total alerts and percentage increase between 2023 and 2024
-joined_tables = alert_clean %>% 
-  dplyr::left_join(detections_clean, 
-                   dplyr::join_by(sighting_id == id)
-                   ) %>%
-  janitor::clean_names() %>%
-  dplyr::mutate(source_entity =
-                  dplyr::case_when(
-                    is.na(source_entity) == T ~ "Ocean Wise",
-                    stringr::str_detect(source_entity, "Ocean Wise") == T ~ "Ocean Wise",
-                    stringr::str_detect(source_entity, "Acartia") == T ~ "Orca Network",
-                    stringr::str_detect(source_entity, "Orca Network") == T ~ "Orca Network",
-                    stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
-                    stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
-                    stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
-                    stringr::str_detect(source_entity, "Whale Alert") == T ~ "Whale Alert",
-                    TRUE ~ source_entity)) %>% 
+
+list_of_dfs = purrr::map(file_list, ~readr::read_csv(.x) %>% 
+                           janitor::clean_names() %>% 
+                           dplyr::filter(., dplyr::if_any(dplyr::starts_with("s") & dplyr::ends_with("_at"), ~ . >= as.Date("2019-01-01"))))
+
+df_name = c("alert_raw", #alert recent data from database 
+            "alert_historic", #alert historic data from database 
+            "detection_recent", #contains sightings
+            "detection_historic", #historical data from database so we don't have to process all data everytime
+            "user_raw")
+
+named_dfs = setNames(list_of_dfs, df_name)
+
+list2env(named_dfs, envir = .GlobalEnv)
+
+rm(list = c("list_of_dfs", "named_dfs", "df_name", "file_list"))
+
+sightings_spreadsheet = readxl::read_xlsx(paste0("C:/Users/", user,
+                                                 "/Ocean Wise Conservation Association/Whales Initiative - General/BCCSN.Groups/Sightings/Cheat Sheet Archive/BCCSN Sightings Master.xlsx"),
+                                          sheet = "app") %>%
+  janitor::clean_names()
+
+
+####~~~~~~~~~~~~~~~~~~~~~~Data Clean~~~~~~~~~~~~~~~~~~~~~~~####
+
+## alert cleaning
+alert_clean = alert_historic %>% 
+  dplyr::bind_rows(alert_raw) %>% 
+  dplyr::select(-location_id) %>% 
   dplyr::distinct()
 
-## Create a filter to remove users who may be inflating the alert numbers - SIMRES / SMRU testers etc
-# joined_tables %>% 
-#   dplyr::group_by(tracking_id)%>% 
+
+## sightings spreadsheet cleaning
+sightings_clean = sightings_spreadsheet %>% 
+  dplyr::select(sub_date, sub_time, id = report_id, species = species_name, ecotype, species_category,
+                species_category, latitude = latitude_dd, longitude = longitude_dd,
+                date, time, number_of_animals, email = reporter_email, organization = db_org,
+                confidence = id_confidence) %>% 
+  dplyr::mutate(time = format(time, "%H:%M:%S"),
+                date = lubridate::as_date(date)) %>% 
+  dplyr::mutate(date = lubridate::as_datetime(paste(date, time))) %>% 
+  dplyr::select(-time)
+
+
+## Detection cleaning
+detections_clean = detection_historic %>% 
+  dplyr::mutate(sighted_at = lubridate::ymd_hm(detection_historic$sighted_at),
+                created_at = lubridate::ymd_hm(detection_historic$created_at)) %>%
+  dplyr::bind_rows(
+    dplyr::anti_join(detection_recent, .)
+  ) %>% 
+  dplyr::mutate(details = stringr::str_remove_all(details, "[\\\\\"{}]")) %>% 
+  dplyr::mutate(details = stringr::str_remove(details, "^[^:]+:")) %>% 
+  dplyr::mutate(details = stringr::str_replace_all(details, "\\s*:\\s*", ":")) %>%
+  dplyr::mutate(details = stringr::str_replace_all(details, "\\s*,\\s*", ",")) %>%
+  dplyr::mutate(details = stringr::str_remove(details, "sightingDistance:")) %>%
+  dplyr::mutate(details = stringr::str_remove(details, "travelDirection:")) %>%
+  dplyr::mutate(details = stringr::str_remove(details, "hydrophoneMeta:")) %>%
+  tidyr::separate_rows(details, sep = ",") %>% 
+  tidyr::separate(col = details, into = c("colname", "data"), sep = ":") %>% 
+  dplyr::mutate(colname = stringr::str_replace(colname, "id", "value")) %>% 
+  dplyr::mutate(colname = stringr::str_replace(colname, "name", "species")) %>% 
+  dplyr::mutate(colname = stringr::str_trim(colname)) %>% 
+  dplyr::group_by(id) %>% 
+  dplyr::mutate(dplyr::across(where(is.character), ~ dplyr::na_if(., ""))) %>% 
+  # dplyr::select(-c("category", "direction")) %>% 
+  tidyr::pivot_wider(names_from = colname, values_from = data) %>% 
+  janitor::clean_names() %>% 
+  janitor::remove_empty(which = "cols")
+
+
+## user cleaning
+user_clean = user_raw %>%
+  dplyr::select(c(id, auth_id, name, phonenumber, organization, vessel = vesselname)) %>% 
+  dplyr::rename(tracking_id = id)
+
+
+####~~~~~~~~~~~~~~~~~~~~~~Data tidy~~~~~~~~~~~~~~~~~~~~~~~####
+
+
+
+
+
+
+#   ####~~~~~~~~~~~~~~~~~~~~~~Metric Sandbox~~~~~~~~~~~~~~~~~~~~~~~####
+
+
+## sightings 2022 vs 2023
+### Use a combination of the Detections df and the sightings spreadsheet to get update to date info on sightings
+### 1. match cols between detections and sightings
+### 2. rbind rows to merge datasets 
+### 3. group per year
+### 4. comparison per year (with and without autonomous detections?)
+
+## As all of the sightings in the spreadsheet are not in real time (some submitted later via the app),
+## I need to match the sub time vs sighting time to see what is in real time, I would count real time 
+## as within an "Alert Period" of 30mins. Therefore, subtime - date < 30mins
+
+# real_time_sightings = sightings_clean %>% 
+
+
+#   
+# sightings_match = sightings_clean %>% 
+#   dplyr::select(id, species, 
+#                 latitude, longitude, 
+#                 date, number_of_animals,
+#                 email)
+# 
+# detections_match = detections_clean %>% 
+#   dplyr::select(c(date = sighted_at,
+#                   latitude, longitude,
+#                   number_of_animals = numberOfAnimals,
+#                   email, id,
+#                   species = name)) %>% 
+#   dplyr::filter(!id %in% sightings_match$id)
+# 
+# sightings_combined = rbind(sightings_match, detections_match)
+# 
+# total_sightings = sightings_combined %>% 
+#   dplyr::group_by(year = lubridate::year(date)) %>% 
+#   dplyr::summarise(count = dplyr::n())
+# 
+# period_2022 = total_sightings[6,2]
+# 
+# period_2023 = total_sightings[7,2]
+
+
+## number of north coast 2023 vs 2022
+# 
+# north_coast_sightings = sightings_combined %>% 
+#   dplyr::filter(dplyr::between(latitude, 51, 56) | dplyr::between(longitude, 126, 135)) %>% 
+#   dplyr::group_by(year = lubridate::year(date)) %>% 
 #   dplyr::summarise(count = dplyr::n()) %>% 
-#   dplyr::left_join(user_clean, by = dplyr::join_by(tracking_id)) %>% 
-#   dplyr::arrange(desc(count)) %>% 
-#   head(.,20,30)
-
-## Filter
-ignore_ids = 
-  c(
-    "auth0|6594b4cf033bf133ad3699cd", # Kathleen Durant - Tester SIMRES
-    "auth0|668f2121ac3a7fb4523c3154", # Sam Tubbut - SMRU
-    "auth0|60bea9676b3a6b00710e23dc", # Pauline Preston - Tester SIMRES
-    "auth0|6594b52f8d750bdc3986a74e", # Chris Genovali - Tester SIMRES
-    "auth0|62ec568fa194be1ada460ea8", # Jason Wood - SMRU
-    "auth0|668469f2caa4d91f1f939ecf", # Paul King - SMRU
-    "auth0|61d60319deb6b60069830256", # Patrick Gallagher
-    "auth0|65fe005349ddc30bde015041" # Emma Laqua - Ocean Wise
-  )
-
-## EXTRA STEP AS LAPIS MESSED UP THE DB. - this will take information from sightings spreadsheet and populate missing sightings data for alerts
-interim_sightings = sightings_clean %>% 
-  dplyr::mutate(
-    lat_new = latitude,
-    lon_new = longitude
-  ) %>% 
-  dplyr::select(c(id, species, lat_new, lon_new))
-
-interim_1 = joined_tables %>% 
-  dplyr::filter(is.na(latitude)) %>% 
-  dplyr::select(-species)
+#   dplyr::mutate(perc_diff = ((count-dplyr::lag(count)/dplyr::lag(count)))*100)
 
 
-interim_2 = joined_tables %>% 
-  dplyr::filter(!is.na(latitude))
-
-interim_1 = interim_1 %>% dplyr::left_join(
-  interim_sightings,
-  by = dplyr::join_by(sighting_id == id)) %>% 
-  dplyr::mutate(
-    latitude = ifelse(!is.na(lat_new), lat_new, latitude),  # Overwrite lat if lat_new is not NA
-    longitude = ifelse(!is.na(lon_new), lon_new, longitude)   # Overwrite lon if lon_new is not NA
-  ) %>%
-  dplyr::select(-lat_new, -lon_new) %>% 
-  dplyr::filter(!is.na(latitude))
-
-## Missing 91 lat lons from 2024 data, 1 from 2023, and 556 from 2019-2021
-
-joined_tables = dplyr::bind_rows(interim_1, interim_2) %>%
-  dplyr::filter(!auth_id %in% ignore_ids)
-
-# still a few NAs in lat but I just will have to filter these out. 
-
-overall_alerts = joined_tables %>% 
-  dplyr::distinct() %>% 
-  dplyr::group_by(
-    year = lubridate::year(sent_at), 
-    month = lubridate::month(sent_at),
-    source = source_entity
-    ) %>% 
-  dplyr::summarise(
-    count = dplyr::n()) %>% 
-  dplyr::filter(
-    year == 2023 | year == 2024) %>%
-  dplyr::mutate(date = lubridate::as_date(paste0(year,"/",month,"/01"))) %>% 
-  tidyr::pivot_wider(
-    names_from = source,
-    values_from = count
-  ) %>% 
-  dplyr::mutate(
-    dplyr::across(
-      dplyr::everything(), ~tidyr::replace_na(.x, 0))
-  ) %>% 
-  dplyr::group_by(year) %>% 
-  dplyr::mutate(
-    `Cumulative Ocean Wise` = cumsum(`Ocean Wise`),
-    `Cumulative Orca Network` = cumsum(`Orca Network`),
-    `Cumulative WhaleSpotter` = cumsum(`WhaleSpotter`),
-    `Cumulative JASCO` = cumsum(JASCO),
-    `Cumulative SMRU` = cumsum(SMRU),
-    `Cumulative Whale Alert` = cumsum(`Whale Alert`),
-    Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU + `Whale Alert`)
-  ) %>% 
-  dplyr::mutate(
-    `Ocean Wise %` = (`Cumulative Ocean Wise`/Total)*100,
-    `Orca Network %` = (`Cumulative Orca Network`/Total)*100,
-    `JASCO %` = (`Cumulative JASCO`/Total)*100,
-    `WhaleSpotter %` = (`Cumulative WhaleSpotter`/Total)*100,
-    `SMRU %` = (`Cumulative SMRU`/Total)*100,
-    `Whale Alert %` = (`Cumulative Whale Alert`/Total)*100
-  ) %>% 
-  dplyr::filter(month < lubridate::month(Sys.Date())) ## This line removes the current months data
-                                                      ##  as reporting generally happens for the last month
-
-## LOOK AT THIS
-overall_alerts
-
-perc_diff = overall_alerts %>% 
-  dplyr::filter(year == 2023 | year == 2024) %>% 
-  dplyr::select(year, month, Total) %>%
-  dplyr::group_by(year, month) %>% 
-  tidyr::pivot_wider(names_from = year, values_from = Total) %>% 
-  dplyr::mutate(perc_inc = ((`2024`-`2023`)/`2023`)*100) %>%
-  dplyr::mutate(dplyr::across(c(`2024`,perc_inc), ~tidyr::replace_na(.x, 0)))
-
-## LOOK AT THIS
-perc_diff
+## BC Sightings
+# Coordinates 
+# 51°00.00’N to 56°00.00’N (with Stewart, BC) 
+# 126°00.00’W to 135°00.00’W 
 
 
-#### ~~~~~~~~~~~~~~~~ How many detections has each source made? ~~~~~~~~~~~~~~~~~~~~~~~ ####
+#   
+#   ## Who recieved alerts? 
+#   
+#   alert_id = alert_clean %>% 
+#     dplyr::left_join(user_clean, by = "tracking_id") %>% 
+#     dplyr::mutate(vessel = stringr::str_remove_all(vessel, "mv |m v|MV|M/V ")) %>% 
+#     ## The next mutates clean up some of the common spelling errors and bits the fuzzy matching misses. Repeated for vessel data.
+#     dplyr::mutate(vessel = tolower(vessel)) %>% 
+#     dplyr::mutate(vessel = dplyr::case_when(vessel == "charles hays amwaal" ~ "charles hays",
+#                                             vessel == "amwaal" ~ "charles hays",
+#                                             vessel == "cowichan" ~ "queen of cowichan",
+#                                             vessel == "sobc" ~ "spirit of british columbia",
+#                                             vessel == "qalb" ~ "queen of alberni",
+#                                             vessel == "spirit of bc" ~ "spirit of british columbia",
+#                                             vessel == "reliant" ~ "seaspan reliant",
+#                                             vessel == "queen of newwest" ~ "queen of new westminster",
+#                                             vessel == "q of alberni" ~ "queen of alberni",
+#                                             vessel == "mazuru bishamon" ~ "maizuru bishamon",
+#                                             vessel == "coastal renn" ~ "coastal renaissance",
+#                                             vessel == "sovc" ~ "spirit of vancouver island",
+#                                             vessel == "q of alberni" ~ "queen of alberni",
+#                                             vessel == "qnw" ~ "queen of new westminster",
+#                                             vessel == "laurier" ~ "sir wilfrid laurier",
+#                                             vessel == "suquamish" ~ "wsf suquamish",
+#                                             vessel == "howe sounbd queen" ~ "howe sound queen",
+#                                             vessel == "inspiration" ~ "coastal inspiration",
+#                                             vessel == "suquwamish" ~ "wsf suquamish",
+#                                             vessel == "seapan zambizi" ~ "seaspan zambezi",
+#                                             vessel == "sprit of british columbia" ~ "spirit of british columbia",
+#                                             vessel == "roald almundsen" ~ "roald amundsen",
+#                                             vessel == "ovean clio" ~ "ocean clio",
+#                                             vessel == "coroleader ol" ~ "coreleader ol",
+#                                             vessel == "zuidetdam" ~ "zuiderdam",
+#                                             vessel == "seaspan anadonis" ~ "seaspan adonis",
+#                                             vessel == "berge yotie" ~ "berge yotei",
+#                                             vessel == "carnval splendor" ~ "carnival splendor",
+#                                             vessel == "blackball" ~ "coho",
+#                                             vessel == "zeta" ~ "star zeta",
+#                                             vessel == "cma cgm rigalito" ~ "cma cgm rigoletto",
+#                                             vessel == "gulf islands spirit" ~ "spirit of vancouver island",
+#                                             vessel == "zeda" ~ "star zeta",
+#                                             vessel == "zeta" ~ "star zeta",
+#                                             TRUE ~ vessel))
+# 
+# bc_ferries_alerts = alert_id %>% 
+#   dplyr::filter(stringr::str_detect(organization, "B[[:space:].]*C[[:space:].]*F")) %>% 
+#   dplyr::mutate(vessel = dplyr::case_when(stringr::str_detect(vessel, "land") == T ~ "unknown",
+#                                           stringr::str_detect(vessel, "on land") == T ~ "unknown",
+#                                           stringr::str_detect(vessel, "(?i)BC\\s*Ferries?|Ferry") == T ~ "unknown",
+#                                           vessel == "mix" ~ "unknown",
+#                                           vessel == "shore" ~ "unknown",
+#                                           vessel == "spirit of british colombia" ~ "spirit of british columbia",
+#                                           vessel == "c falcon" ~ "centennial falcon",
+#                                           vessel == "spirit of britis columbia" ~ "spirit of british columbia",
+#                                           vessel == "howe soubd queen" ~ "howe sound queen",
+#                                           vessel == "howe soubd queen" ~ "howe sound queen",
+#                                           vessel == "sovi" ~ "spirit of vancouver island",
+#                                           vessel == "cosstal inspiration" ~ "coastal inspiration",
+#                                           vessel == "queen alberni" ~ "queen of alberni",
+#                                           vessel == "norther adventure" ~ "northern adventure",
+#                                           TRUE ~ vessel)) %>% 
+#   dplyr::group_by(vessel) %>% 
+#   dplyr::summarise(count = dplyr::n())
+#   
+# user_clean %>% 
+#   dplyr::filter(tracking_id %in% c("208a89cd-daea-cd53-6e83-f49e4da9d3a1", 
+#                                    "4deac481-edb3-c5bd-cfb9-3e4b3fa48161",
+#                                    "864f93b8-ead2-cd5f-6278-e67dedfa8c1c"))
 
 
-## Sightings numbers
+# file_list = list.files("C:/Users/alext/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/", full.names = T)
 
-sights_pre = detections_clean %>% 
-  janitor::clean_names() %>%
-  dplyr::mutate(source_entity =
-                  dplyr::case_when(
-                    is.na(source_entity) == T ~ "Ocean Wise",
-                    stringr::str_detect(source_entity, "Ocean Wise") == T ~ "Ocean Wise",
-                    stringr::str_detect(source_entity, "Acartia") == T ~ "Orca Network",
-                    stringr::str_detect(source_entity, "Orca Network") == T ~ "Orca Network",
-                    stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
-                    stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
-                    stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
-                    TRUE ~ source_entity)) %>%  
-  dplyr::ungroup() %>% 
-  dplyr::select(-c(created_at, id, code)) %>%  # do this to remove errors caused by bugs which led to duplicates sent at same time with different
-  dplyr::distinct()                             # created_at values
-
-
-sights = sights_pre %>%  
-  dplyr::group_by(year_mon = zoo::as.yearmon(sighted_at), source_entity) %>% 
-  dplyr::summarise(n = dplyr::n()) %>%
-  tidyr::pivot_wider(names_from = source_entity,
-                     values_from = n) %>% 
-  dplyr::mutate(dplyr::across(dplyr::everything(), ~tidyr::replace_na(.x, 0))) %>% 
-  dplyr::select(-c(`TEST - PLEASE IGNORE`, string)) %>% 
-  dplyr::filter(lubridate::year(year_mon) != 2019) %>% 
-  dplyr::group_by(year = lubridate::year(year_mon)) %>% 
-  dplyr::mutate(
-    `Cumulative Ocean Wise` = cumsum(`Ocean Wise`),
-    `Cumulative Orca Network` = cumsum(`Orca Network`),
-    `Cumulative WhaleSpotter` = cumsum(`WhaleSpotter`),
-    `Cumulative JASCO` = cumsum(JASCO),
-    `Cumulative SMRU` = cumsum(SMRU),
-    `Cumulative BCHN/SWAG` = cumsum(`BCHN/SWAG`),
-    `Cumulative Whale Alert` = cumsum(`Whale Alert Alaska`),
-    Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU + `Whale Alert Alaska`))
-
-sights
-
-#### ~~~~~~~~~~~~~~~~ Where are the automated detection methods? ~~~~~~~~~~~~~~~~~~~~~~~ ####
-
-# locations = tibble::tibble(
-#   station_name = c("Fin Island", "Lime Kiln", "Boundary Pass", "Carmanah Lighthouse", "Active Pass North", "Active Pass South", "Saturna Island"),
-#   station_type = c("hydrophone", "hydrophone","hydrophone","infrared camera","infrared camera","infrared camera","infrared camera"),
-#   latitude = c(53.211, 48.515834, 48.773653, 48.611406, 48.877781, 48.857528, 48.792393),
-#   longitude = c(-129.498, -123.152978,  -123.042226, -124.751156, -123.316408, -123.344047, -123.096821))
-# #
-# #
-# # ## Map of locations with icons
-# #
-# icon_list = leaflet::iconList(
-#   "hydrophone" = leaflet::makeIcon(iconUrl = "./../../../Downloads/Picture4.png", iconWidth = 60, iconHeight = 60),
-#   "infrared camera" = leaflet::makeIcon(iconUrl = "./../../../Downloads/Picture3.png", iconWidth = 38, iconHeight = 38)
-# )
-# #
-# locations %>%
-#   dplyr::filter(station_type == "infrared camera") %>%
-#   leaflet::leaflet() %>%
-#   leaflet::addTiles() %>%
-#   leaflet::addMarkers(
-#     ~longitude, ~latitude,
-#     icon = ~icon_list[station_type],
-#     label = ~paste("<b>Station Name:</b>", station_name, "<br><b>Type:</b>", station_type),
-#     leaflet::labelOptions(noHide = FALSE, textsize = "12px", direction = "auto")
-#   ) %>%
-#   # leaflet::addTitle("Stations Map",
-#   #                   leaflet::titleOpts = list(textsize = "24px", textOnly = TRUE)) %>%
-#   leaflet::addMiniMap(toggleDisplay = TRUE) %>%
-#   leaflet::setView(lng = -123.1207, lat = 49.2827, zoom = 6)
-# # 
-
-####~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Sandbox ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
-
+# sightings_spreadsheet = readxl::read_xlsx(paste0("C:/Users/alext/Ocean Wise Conservation Association/Whales Initiative - General/BCCSN.Groups/Sightings/Cheat Sheet Archive/BCCSN Sightings Master.xlsx"),
+#                                           sheet = "app") %>%
+#   janitor::clean_names()
 
