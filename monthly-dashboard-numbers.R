@@ -51,6 +51,7 @@ joined_tables = alert_clean %>%
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
                     stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
                     stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
+                    stringr::str_detect(source_entity, "Whale Alert") == T ~ "Whale Alert",
                     TRUE ~ source_entity))
 
 ## EXTRA STEP AS LAPIS MESSED UP THE DB. - this will take information from sightings spreadsheet and populate missing sightings data for alerts
