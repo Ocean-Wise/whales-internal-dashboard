@@ -491,7 +491,7 @@ users_overall = readxl::read_xlsx(
   janitor::clean_names()
   
 users_cumulative = users_overall %>% 
-  dplyr::filter(region_clean == "USA") %>% 
+  # dplyr::filter(region_clean == "USA") %>% 
   dplyr::group_by(year_qtr = zoo::as.yearqtr(approval_date), org_type) %>%
   dplyr::summarise(count = dplyr::n()) %>% 
   dplyr::group_by(org_type) %>% 
@@ -654,7 +654,7 @@ users_cumulative %>%
   
 
 
- SS####~~~~~~~~~~~~~~~~~~~~~~~~~~~ Mapping ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
+ ####~~~~~~~~~~~~~~~~~~~~~~~~~~~ Mapping ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 
  ## Sightings
 sight_map = sightings_clean %>%
