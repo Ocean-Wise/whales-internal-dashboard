@@ -480,7 +480,7 @@ overall_alerts %>%
                  ))
 
 
-SSS#### ~~~~~~~~~~~ USER GROWTH ~~~~~~~~~~~ ####
+#### ~~~~~~~~~~~ USER GROWTH ~~~~~~~~~~~ ####
 
 ### IMPORT DATA ###
 
@@ -658,12 +658,12 @@ users_cumulative %>%
 
  ## Sightings
 sight_map = sightings_clean %>%
- dplyr::filter(lubridate::year(date) == 2024 & dplyr::between(lubridate::month(date), 1,9 )) %>%
+ dplyr::filter(lubridate::year(date) == 2024 & dplyr::between(lubridate::month(date), 1,10 )) %>%
  dplyr::mutate(species = 
                  dplyr::case_when(
                    stringr::str_detect(species, "dolphin") ~ "Dolphin/Porpoise species",
                    stringr::str_detect(species, "porpoise") ~ "Dolphin/Porpoise species",
-                   # stringr::str_detect(species, "turtle") ~ "Potential Turtle species",
+                   stringr::str_detect(species, "turtle") ~ "Potential Turtle species",
                    stringr::str_detect(species, "False") ~ "Dolphin/Porpoise species",
                    stringr::str_detect(species, "Sei") ~ "Unidentified whale",
                    .default = as.character(species)
@@ -718,7 +718,7 @@ sight_map %>%
 ## Alerts
 
 alert_map = joined_tables %>%
-  dplyr::filter(lubridate::year(sent_at) == 2024 & dplyr::between(lubridate::month(sent_at), 1,9 )) %>%
+  dplyr::filter(lubridate::year(sent_at) == 2024 & dplyr::between(lubridate::month(sent_at), 1,10)) %>%
   dplyr::mutate(col_palette =
                   dplyr::case_when(
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "#A569BD",
@@ -765,16 +765,13 @@ alert_map %>%
     labels = c(unique(alert_map$detection_method)),
     opacity = 0.8) %>% 
   leaflet::leafletOptions(zoomSnap = 0.1,  # Change zoom steps to finer intervals (0.5)
-                 zoomDelta = 0.1)  # Change zoom increments to 0.5
-
-
-  # ) %>% 
-  # htmltools::save_html(., paste0("C:/Users/", 
-  #                                user, 
-  #                                "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/",
-  #                                "alert-map-",
-  #                                Sys.Date(),
-  #                                ".html"))
+                 zoomDelta = 0.1) %>%   # Change zoom increments to 0.5) %>%
+htmltools::save_html(., paste0("C:/Users/",
+                               user,
+                               "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/",
+                               "alert-map-",
+                               Sys.Date(),
+                               ".html"))
   
 
 ## Heat map
