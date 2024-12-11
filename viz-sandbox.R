@@ -14,6 +14,54 @@
 
 ##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
 
+## Year on year growth of detection and alerts
+
+sightings_yearly = sights %>% 
+  dplyr::select(1:8) %>%
+  dplyr::group_by(year_mon) %>% 
+  tidyr::pivot_longer(!c(year,year_mon), names_to = "source", values_to = "count") %>% 
+  dplyr::summarise(detection_count = sum(count))
+
+
+alerts_yearly = overall_alerts %>% 
+  dplyr::select(1:9) %>%
+  dplyr::group_by(year_mon = zoo::as.yearmon(date)) %>% 
+  dplyr::select(-c(year,month,date)) %>% 
+  tidyr::pivot_longer(!year_mon, names_to = "source", values_to = "count") %>% 
+  dplyr::summarise(alert_count = sum(count))
+  
+wras_growth = sightings_yearly %>% 
+  dplyr::left_join(alerts_yearly) %>% 
+  tidyr::pivot_longer(cols = c(detection_count, alert_count),
+                      names_to = "type",
+                      values_to = "count") %>% 
+  ggplot(aes(x = year_mon, y = count, color = type)) +
+  geom_smooth(method = "loess", span = 0.2, se = FALSE, size = 1) +
+  # geom_line(linewidth = 1, linejoin = "round") +
+  scale_color_manual(values = c("#A8007E", "#AAAC24")) +
+  zoo::scale_x_yearmon(format = "%b %Y", n = 10) + # Format yearmon axis
+  # scale_y_continuous(labels = comma) +
+  labs(
+    title = "",
+    x = "",
+    y = ""
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(), # Remove major vertical grid lines
+    panel.grid.minor.x = element_blank(),  # Remove minor vertical grid lines
+    axis.text.x = element_text(size = 14), # Increase x-axis text size
+    axis.text.y = element_text(size = 14), # Increase y-axis text size
+    axis.title.x = element_text(size = 16), # Increase x-axis title size
+    axis.title.y = element_text(size = 16)  # Increase y-axis title size
+    )
+  
+  
+
+
+
+
+
 #### ~~~~~~~~~~~~~~~~~~~~~~~ Sighting proportions ~~~~~~~~~~~~~~~~~~~~####
 
 ## All real-time sightings, not just sightings that led to alerts
@@ -27,8 +75,8 @@ sights_props = sights %>%
   ) %>% 
   # dplyr::filter(year_mon != "Aug 2024", source != "Whale Alert Alaska") %>% 
   dplyr::group_by(year = lubridate::year(year_mon), source) %>% 
-  dplyr::summarise(count = sum(count)) %>% 
-  dplyr::filter(year == 2024)
+  dplyr::summarise(count = sum(count)) 
+  # dplyr::filter(year == 2024)
   # update the year to get different years, or remove to get a timeline
   # remove whale alert alaska when we get more data from them 
   
@@ -658,7 +706,8 @@ users_cumulative %>%
 
  ## Sightings
 sight_map = sightings_clean %>%
- dplyr::filter(lubridate::year(date) == 2024 & dplyr::between(lubridate::month(date), 1,10 )) %>%
+ dplyr::filter(lubridate::year(date) == 2024) %>%  
+               # & dplyr::between(lubridate::month(date), 1,10 )) %>%
  dplyr::mutate(species = 
                  dplyr::case_when(
                    stringr::str_detect(species, "dolphin") ~ "Dolphin/Porpoise species",
@@ -718,7 +767,7 @@ sight_map %>%
 ## Alerts
 
 alert_map = joined_tables %>%
-  dplyr::filter(lubridate::year(sent_at) == 2024 & dplyr::between(lubridate::month(sent_at), 1,10)) %>%
+  # dplyr::filter(lubridate::year(sent_at) == 2024 & dplyr::between(lubridate::month(sent_at), 1,10)) %>%
   dplyr::mutate(col_palette =
                   dplyr::case_when(
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "#A569BD",
@@ -782,8 +831,8 @@ leaflet::leaflet(alert_map,
   leaflet.extras::addHeatmap(
     lng = ~longitude,
     lat = ~latitude,
-    blur = 5, 
-    max = 0.2, 
+    blur = 2, 
+    max = 0.1, 
     radius = 5) 
 # %>% 
 #   htmltools::save_html(., paste0("C:/Users/", 

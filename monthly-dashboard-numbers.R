@@ -88,9 +88,11 @@ interim_1 = interim_1 %>% dplyr::left_join(
   dplyr::select(-lat_new, -lon_new) %>% 
   dplyr::filter(!is.na(latitude))
 ## Missing 91 lat lons from 2024 data, 1 from 2023, and 556 from 2019-2021
+
 joined_tables = dplyr::bind_rows(interim_1, interim_2) %>%
   dplyr::filter(!auth_id %in% ignore_ids)
 # still a few NAs in lat but I just will have to filter these out. 
+
 overall_alerts = joined_tables %>% 
   dplyr::distinct() %>% 
   dplyr::group_by(
@@ -100,8 +102,8 @@ overall_alerts = joined_tables %>%
   ) %>% 
   dplyr::summarise(
     count = dplyr::n()) %>% 
-  dplyr::filter(
-    year == 2023 | year == 2024) %>%
+  # dplyr::filter(
+    # year == 2023 | year == 2024) %>%
   dplyr::mutate(date = lubridate::as_date(paste0(year,"/",month,"/01"))) %>% 
   tidyr::pivot_wider(
     names_from = source,
@@ -128,8 +130,9 @@ overall_alerts = joined_tables %>%
     `WhaleSpotter %` = (`Cumulative WhaleSpotter`/Total)*100,
     `SMRU %` = (`Cumulative SMRU`/Total)*100,
     `Whale Alert %` = (`Cumulative Whale Alert`/Total)*100
-  ) %>% 
-  dplyr::filter(month < lubridate::month(Sys.Date())) ## This line removes the current months data
+  ) 
+# %>% 
+  # dplyr::filter(month < lubridate::month(Sys.Date())) ## This line removes the current months data
 ##  as reporting generally happens for the last month
 ## LOOK AT THIS
 overall_alerts
@@ -159,6 +162,7 @@ sights_pre = detections_clean %>%
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
                     stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
                     stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
+                    stringr::str_detect(source_entity, "BCHN/SWAG") == T ~ "Fin Island",
                     TRUE ~ source_entity)) %>%  
   dplyr::ungroup() %>% 
   dplyr::select(-c(created_at, id, code)) %>%  # do this to remove errors caused by bugs which led to duplicates sent at same time with different
@@ -170,7 +174,7 @@ sights = sights_pre %>%
   tidyr::pivot_wider(names_from = source_entity,
                      values_from = n) %>% 
   dplyr::mutate(dplyr::across(dplyr::everything(), ~tidyr::replace_na(.x, 0))) %>% 
-  dplyr::select(-c(`TEST - PLEASE IGNORE`, string)) %>% 
+  dplyr::select(-c(`TEST - PLEASE IGNORE`, string, TEST)) %>% 
   dplyr::filter(lubridate::year(year_mon) != 2019) %>% 
   dplyr::group_by(year = lubridate::year(year_mon)) %>% 
   dplyr::mutate(
@@ -179,9 +183,9 @@ sights = sights_pre %>%
     `Cumulative WhaleSpotter` = cumsum(`WhaleSpotter`),
     `Cumulative JASCO` = cumsum(JASCO),
     `Cumulative SMRU` = cumsum(SMRU),
-    `Cumulative BCHN/SWAG` = cumsum(`BCHN/SWAG`),
     `Cumulative Whale Alert` = cumsum(`Whale Alert Alaska`),
-    Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU + `Whale Alert Alaska`))
+    `Cumulative Fin Island` = cumsum(`Fin Island`),
+    Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU + `Whale Alert Alaska` + `Fin Island`))
 
 sights
 
