@@ -20,7 +20,8 @@ sightings_yearly = sights %>%
   dplyr::select(1:8) %>%
   dplyr::group_by(year_mon) %>% 
   tidyr::pivot_longer(!c(year,year_mon), names_to = "source", values_to = "count") %>% 
-  dplyr::summarise(detection_count = sum(count))
+  dplyr::summarise(detection_count = sum(count)) %>% 
+  dplyr::filter(year_mon != zoo::as.yearmon(Sys.Date()))
 
 
 alerts_yearly = overall_alerts %>% 
@@ -28,7 +29,8 @@ alerts_yearly = overall_alerts %>%
   dplyr::group_by(year_mon = zoo::as.yearmon(date)) %>% 
   dplyr::select(-c(year,month,date)) %>% 
   tidyr::pivot_longer(!year_mon, names_to = "source", values_to = "count") %>% 
-  dplyr::summarise(alert_count = sum(count))
+  dplyr::summarise(alert_count = sum(count)) %>% 
+  dplyr::filter(year_mon != zoo::as.yearmon(Sys.Date()))
   
 wras_growth = sightings_yearly %>% 
   dplyr::left_join(alerts_yearly) %>% 
@@ -180,7 +182,7 @@ plotly::plot_ly(sights_species,
 x = detections_clean %>%
   dplyr::ungroup() %>% 
   # dplyr::filter(as.Date(sighted_at) > as.Date("2024/02/01")) %>% 
-  dplyr::filter(source_entity == "SMRUC") %>% 
+  dplyr::filter(stringr::str_detect(source_entity, "WhaleSpotter")) %>% 
   dplyr::mutate(
     sun_times = suncalc::getSunlightTimes(as.Date(sighted_at),
                                           lat = 48.51566, 
@@ -392,60 +394,70 @@ alert_bar %>%
 
 
 ### Hydrophone alerts
-
-overall_alerts %>% 
+sights %>% 
   dplyr::ungroup() %>% 
-  dplyr::filter(year == 2024) %>% 
-  dplyr::select(date, `Cumulative JASCO`, `Cumulative SMRU`) %>% 
-  # tidyr::pivot_longer(
-  #   cols = -date,
-  #   names_to = "catagory",
-  #   values_to = "vals"
-  # ) %>% 
-  plotly::plot_ly(., 
-                  x = ~date, 
-                  y = ~`Cumulative JASCO`, 
-                  name = "Boundary Pass",
-                  type = 'scatter', 
-                  mode = 'lines',
-                  line = list(color = "A8007E")) %>%
-  plotly::add_trace(y = ~`Cumulative SMRU`,
-                    name = "Lime Kiln",
-                    type = "scatter",
-                    mode = "lines",
-                    line = list(color = "005580")) %>% 
-  plotly::layout(xaxis = list(title = "",
-                              showline = TRUE,
-                              showgrid = FALSE,
-                              showticklabels = TRUE,
-                              linecolor = 'rgb(204, 204, 204)',
-                              linewidth = 2,
-                              ticks = 'outside',
-                              tickcolor = 'rgb(204, 204, 204)',
-                              tickwidth = 2,
-                              ticklength = 5,
-                              # # tickformat="%b %Y",
-                              # ticktext = format("%b %Y"),
-                              # dtick = "M1",
-                              tickfont = list(family = 'Arial',
-                                              size = 16,
-                                              color = 'rgb(82, 82, 82)')),
-                 yaxis = list(title = "",
-                              showgrid = T,
-                              zeroline = FALSE,
-                              showline = FALSE,
-                              tickfont = list(family = 'Arial',
-                                              size = 16,
-                                              color = 'rgb(82, 82, 82)')),
-                 legend = list(
-                   orientation = "h",        # horizontal legend
-                   xanchor = "center",       # anchor legend at the center
-                   tickfont = list(family = 'Arial',
-                                   size = 16,
-                                   color = 'rgb(82, 82, 82)'),
-                   x = 0.5,                  # set position to the center (horizontally)
-                   y = -0.1                  # move legend below the plot
-                 ))
+  dplyr::select(c(year_mon, sightigns_jasco = JASCO, sightings_smru = SMRU)) %>% 
+  dplyr::mutate(cum_sightings_smru = cumsum(sightings_smru),
+                cum_sightings_jasco = cumsum(sightigns_jasco),
+                date = lubridate::as_date(year_mon)) %>%
+  dplyr::right_join(overall_alerts %>% 
+                      dplyr::filter(year == 2024), by = dplyr::join_by(date)) %>% 
+  dplyr::select(date, 
+                sightings_smru, sightigns_jasco, cum_sightings_smru, cum_sightings_jasco,
+                alert_jasco = JASCO, alert_smru = SMRU, cum_alert_jasco = `Cumulative JASCO`, cum_alert_smru =`Cumulative SMRU`) %>% 
+  plotly::plot_ly(x = ~date) %>%
+  plotly::add_lines(y = ~cum_sightings_smru, name = 'Detections Lime Kiln', line = list(color = '#2ca02c')) %>%
+  plotly::add_lines(y = ~cum_sightings_jasco, name = 'Detections Boundary Pass', line = list(color = '#ff7f0e')) %>%
+  plotly::add_lines(y = ~cum_alert_smru, name = 'Alerts Lime Kiln', line = list(color = '#2ca02c', dash = 'dash')) %>%
+  plotly::add_lines(y = ~cum_alert_jasco, name = 'Alerts Boundary Pass', line = list(color = '#ff7f0e', dash = 'dash')) %>%
+  plotly::layout(title = "",
+                 xaxis = list(title = ""),
+                 yaxis = list(title = ""),
+                 shapes = list(
+                   list(
+                     type = "line",
+                     x0 = as.Date("2024-07-15"),
+                     x1 = as.Date("2024-07-15"),
+                     y0 = 0,
+                     y1 = 1,
+                     xref = "x",
+                     yref = "paper",
+                     line = list(color = "darkgrey", dash = "dash")
+                   ),
+                   list(
+                     type = "line",
+                     x0 = as.Date("2024-12-01"),
+                     x1 = as.Date("2024-12-01"),
+                     y0 = 0,
+                     y1 = 1,
+                     xref = "x",
+                     yref = "paper",
+                     line = list(color = "darkgrey", dash = "dash")
+                   )
+                 ),
+                 annotations = list(
+                   list(
+                     x = as.Date("2024-06-28"),
+                     y = 1,
+                     xref = "x",
+                     yref = "paper",
+                     text = "OW database\noutage ~3 days",
+                     showarrow = FALSE,
+                     font = list(size = 12, color = "black"),
+                     align = "center"
+                   ),
+                   list(
+                     x = as.Date("2024-11-15"),
+                     y = 1,
+                     xref = "x",
+                     yref = "paper",
+                     text = "OW API down for\n Boundary Pass\n ~9 days",
+                     showarrow = FALSE,
+                     font = list(size = 12, color = "black"),
+                     align = "center"
+                   )
+                 )
+  )
 
 ## Line graph of alerts
 
@@ -757,6 +769,7 @@ sight_map %>%
     labels = c(unique(sight_map$species)),
     opacity = 0.8
    ) %>% 
+  leaflet::addMiniMap(toggleDisplay = TRUE) %>%
   htmltools::save_html(., paste0("C:/Users/", 
                                  user, 
                                  "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/",
@@ -767,7 +780,7 @@ sight_map %>%
 ## Alerts
 
 alert_map = joined_tables %>%
-  # dplyr::filter(lubridate::year(sent_at) == 2024 & dplyr::between(lubridate::month(sent_at), 1,10)) %>%
+  dplyr::filter(lubridate::year(sent_at) == 2024) %>%
   dplyr::mutate(col_palette =
                   dplyr::case_when(
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "#A569BD",
@@ -813,6 +826,7 @@ alert_map %>%
     colors = c(unique(alert_map$col_palette)),
     labels = c(unique(alert_map$detection_method)),
     opacity = 0.8) %>% 
+  leaflet::addMiniMap(toggleDisplay = TRUE) %>%
   leaflet::leafletOptions(zoomSnap = 0.1,  # Change zoom steps to finer intervals (0.5)
                  zoomDelta = 0.1) %>%   # Change zoom increments to 0.5) %>%
 htmltools::save_html(., paste0("C:/Users/",
@@ -866,7 +880,8 @@ detections_clean %>%
                     stringr::str_detect(source_entity, "SMRU") == T ~ "#17202A",
                     stringr::str_detect(source_entity, "Whale Alert") == T ~ "#2b547e"
                   )) %>%
-  dplyr::filter(source_entity == "Orca Network" | source_entity == "Whale Alert") %>% 
+  # dplyr::filter(source_entity == "Orca Network" | source_entity == "Whale Alert") %>%
+  dplyr::filter(source_entity != "string" & source_entity != "TEST") %>%
   leaflet::leaflet() %>%
   leaflet::addTiles() %>%
   leaflet::addCircleMarkers(
@@ -910,7 +925,62 @@ x = detections_clean %>%
 
 
 
+######################### SANDBOX ######################################
 
+# 
+# overall_alerts %>% 
+#   dplyr::ungroup() %>% 
+#   dplyr::filter(year == 2024) %>% 
+#   dplyr::select(date, `Cumulative JASCO`, `Cumulative SMRU`) %>% 
+#   # tidyr::pivot_longer(
+#   #   cols = -date,
+#   #   names_to = "catagory",
+#   #   values_to = "vals"
+#   # ) %>% 
+#   plotly::plot_ly(., 
+#                   x = ~date, 
+#                   y = ~`Cumulative JASCO`, 
+#                   name = "Boundary Pass",
+#                   type = 'scatter', 
+#                   mode = 'lines',
+#                   line = list(color = "A8007E")) %>%
+#   plotly::add_trace(y = ~`Cumulative SMRU`,
+#                     name = "Lime Kiln",
+#                     type = "scatter",
+#                     mode = "lines",
+#                     line = list(color = "005580")) %>% 
+#   plotly::layout(xaxis = list(title = "",
+#                               showline = TRUE,
+#                               showgrid = FALSE,
+#                               showticklabels = TRUE,
+#                               linecolor = 'rgb(204, 204, 204)',
+#                               linewidth = 2,
+#                               ticks = 'outside',
+#                               tickcolor = 'rgb(204, 204, 204)',
+#                               tickwidth = 2,
+#                               ticklength = 5,
+#                               # # tickformat="%b %Y",
+#                               # ticktext = format("%b %Y"),
+#                               # dtick = "M1",
+#                               tickfont = list(family = 'Arial',
+#                                               size = 16,
+#                                               color = 'rgb(82, 82, 82)')),
+#                  yaxis = list(title = "",
+#                               showgrid = T,
+#                               zeroline = FALSE,
+#                               showline = FALSE,
+#                               tickfont = list(family = 'Arial',
+#                                               size = 16,
+#                                               color = 'rgb(82, 82, 82)')),
+#                  legend = list(
+#                    orientation = "h",        # horizontal legend
+#                    xanchor = "center",       # anchor legend at the center
+#                    tickfont = list(family = 'Arial',
+#                                    size = 16,
+#                                    color = 'rgb(82, 82, 82)'),
+#                    x = 0.5,                  # set position to the center (horizontally)
+#                    y = -0.1                  # move legend below the plot
+#                  ),
 
 
 

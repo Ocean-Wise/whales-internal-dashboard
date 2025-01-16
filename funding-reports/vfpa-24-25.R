@@ -23,8 +23,7 @@ source("./monthly-dashboard-numbers.R")
 period_detections = detections_clean %>% 
   dplyr::filter(sighted_at > lubridate::as_date("2024-02-01"))
 
-wras_info = overall_alerts %>% 
-  dplyr::filter(dplyr::between(month, 1,9) & year == 2024) 
+
 
 
 #### ~~~~~~~~~~~~~~~~~~~ Plots ~~~~~~~~~~~~~~~~~~~~~~~~~~ ####
@@ -95,7 +94,8 @@ leaflet::leaflet(alert_map) %>%
 
 ## Line graph of alerts
 
-wras_info %>%
+overall_alerts %>% 
+  dplyr::filter(year == 2024)  %>%
   plotly::plot_ly(
     y = ~`Cumulative Ocean Wise`,
     x = ~date,
@@ -187,7 +187,8 @@ sights %>%
   dplyr::mutate(cum_sightings_smru = cumsum(sightings_smru),
                 cum_sightings_jasco = cumsum(sightigns_jasco),
                 date = lubridate::as_date(year_mon)) %>%
-  dplyr::right_join(wras_info, by = dplyr::join_by(date)) %>% 
+  dplyr::right_join(overall_alerts %>% 
+                      dplyr::filter(year == 2024), by = dplyr::join_by(date)) %>% 
   dplyr::select(date, 
                 sightings_smru, sightigns_jasco, cum_sightings_smru, cum_sightings_jasco,
                 alert_jasco = JASCO, alert_smru = SMRU, cum_alert_jasco = `Cumulative JASCO`, cum_alert_smru =`Cumulative SMRU`) %>% 

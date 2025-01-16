@@ -26,9 +26,9 @@ source(file = "./data-processing.R")
 
 ####~~~~~~~~~~~~~~~~~~~~~~# WRAS alerts vs 2023~~~~~~~~~~~~~~~~~~~~~~~####
 ### Goal...
-## Send a total of 15,000 WRAS alerts (at least a 10% increase from 2023 baseline) in BC and WA waters to reduce 
+## Send a total of 15,000 WRAS alerts (at least a 10% increase from 2024 baseline) in BC and WA waters to reduce 
 ## the risk of ship strike for at least 15,000 encounters with whales
-## total alerts and percentage increase between 2023 and 2024
+## total alerts and percentage increase between 2024 and 2025
 joined_tables = alert_clean %>% 
   dplyr::left_join(detections_clean, 
                    dplyr::join_by(sighting_id == id)
@@ -45,7 +45,8 @@ joined_tables = alert_clean %>%
                     stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
                     stringr::str_detect(source_entity, "Whale Alert") == T ~ "Whale Alert",
                     TRUE ~ source_entity)) %>% 
-  dplyr::distinct()
+  dplyr::distinct() %>% 
+  dplyr::filter(source_entity != "TEST")
 
 ## Create a filter to remove users who may be inflating the alert numbers - SIMRES / SMRU testers etc
 # joined_tables %>% 
@@ -73,11 +74,14 @@ interim_sightings = sightings_clean %>%
     lon_new = longitude
   ) %>% 
   dplyr::select(c(id, species, lat_new, lon_new))
+
 interim_1 = joined_tables %>% 
   dplyr::filter(is.na(latitude)) %>% 
   dplyr::select(-species)
+
 interim_2 = joined_tables %>% 
   dplyr::filter(!is.na(latitude))
+
 interim_1 = interim_1 %>% dplyr::left_join(
   interim_sightings,
   by = dplyr::join_by(sighting_id == id)) %>% 
@@ -139,12 +143,12 @@ overall_alerts
 
 
 perc_diff = overall_alerts %>% 
-  dplyr::filter(year == 2023 | year == 2024) %>% 
+  dplyr::filter(year == 2024 | year == 2025) %>% 
   dplyr::select(year, month, Total) %>%
   dplyr::group_by(year, month) %>% 
   tidyr::pivot_wider(names_from = year, values_from = Total) %>% 
-  dplyr::mutate(perc_inc = ((`2024`-`2023`)/`2023`)*100) %>%
-  dplyr::mutate(dplyr::across(c(`2024`,perc_inc), ~tidyr::replace_na(.x, 0)))
+  dplyr::mutate(perc_inc = ((`2025`-`2024`)/`2024`)*100) %>%
+  dplyr::mutate(dplyr::across(c(`2025`,perc_inc), ~tidyr::replace_na(.x, 0)))
 ## LOOK AT THIS
 
 perc_diff
@@ -190,35 +194,35 @@ sights = sights_pre %>%
 sights
 
 #### ~~~~~~~~~~~~~~~~ Where are the automated detection methods? ~~~~~~~~~~~~~~~~~~~~~~~ ####
-# locations = tibble::tibble(
-#   station_name = c("Fin Island", "Lime Kiln", "Boundary Pass", "Carmanah Lighthouse", "Active Pass North", "Active Pass South", "Saturna Island"),
-#   station_type = c("hydrophone", "hydrophone","hydrophone","infrared camera","infrared camera","infrared camera","infrared camera"),
-#   latitude = c(53.211, 48.515834, 48.773653, 48.611406, 48.877781, 48.857528, 48.792393),
-#   longitude = c(-129.498, -123.152978,  -123.042226, -124.751156, -123.316408, -123.344047, -123.096821))
-# #
-# #
-# # ## Map of locations with icons
-# #
-# icon_list = leaflet::iconList(
-#   "hydrophone" = leaflet::makeIcon(iconUrl = "./../../../Downloads/Picture4.png", iconWidth = 60, iconHeight = 60),
-#   "infrared camera" = leaflet::makeIcon(iconUrl = "./../../../Downloads/Picture3.png", iconWidth = 38, iconHeight = 38)
-
-# #
-# locations %>%
-#   dplyr::filter(station_type == "infrared camera") %>%
-#   leaflet::leaflet() %>%
-#   leaflet::addTiles() %>%
-#   leaflet::addMarkers(
-#     ~longitude, ~latitude,
-#     icon = ~icon_list[station_type],
-#     label = ~paste("<b>Station Name:</b>", station_name, "<br><b>Type:</b>", station_type),
-#     leaflet::labelOptions(noHide = FALSE, textsize = "12px", direction = "auto")
-#   ) %>%
-#   # leaflet::addTitle("Stations Map",
-#   #                   leaflet::titleOpts = list(textsize = "24px", textOnly = TRUE)) %>%
-#   leaflet::addMiniMap(toggleDisplay = TRUE) %>%
-#   leaflet::setView(lng = -123.1207, lat = 49.2827, zoom = 6)
-# # 
+ locations = tibble::tibble(
+   station_name = c("Fin Island", "Lime Kiln", "Boundary Pass", "Carmanah Lighthouse", "Active Pass North", "Active Pass South", "Saturna Island"),
+   station_type = c("hydrophone", "hydrophone","hydrophone","infrared camera","infrared camera","infrared camera","infrared camera"),
+   latitude = c(53.211, 48.515834, 48.773653, 48.611406, 48.877781, 48.857528, 48.792393),
+   longitude = c(-129.498, -123.152978,  -123.042226, -124.751156, -123.316408, -123.344047, -123.096821))
+ #
+ #
+ # ## Map of locations with icons
+ #
+ icon_list = leaflet::iconList(
+   "hydrophone" = leaflet::makeIcon(iconUrl = "./../../../Downloads/Picture4.png", iconWidth = 60, iconHeight = 60),
+   "infrared camera" = leaflet::makeIcon(iconUrl = "./../../../Downloads/Picture3.png", iconWidth = 38, iconHeight = 38)
+ )
+ #
+ locations %>%
+   # dplyr::filter(station_type == "infrared camera") %>%
+   leaflet::leaflet() %>%
+   leaflet::addTiles() %>%
+   leaflet::addMarkers(
+     ~longitude, ~latitude,
+     icon = ~icon_list[station_type],
+     label = ~paste("<b>Station Name:</b>", station_name, "<b>Type:</b>", station_type),
+     leaflet::labelOptions(noHide = FALSE, textsize = "12px", direction = "auto")
+   ) %>%
+   # leaflet::addTitle("Stations Map",
+   #                   leaflet::titleOpts = list(textsize = "24px", textOnly = TRUE)) %>%
+   leaflet::addMiniMap(toggleDisplay = TRUE) %>%
+   leaflet::setView(lng = -123.1207, lat = 49.2827, zoom = 6)
+ #
 
 
 ####~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Sandbox ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
