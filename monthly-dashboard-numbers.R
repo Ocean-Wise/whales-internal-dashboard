@@ -142,7 +142,7 @@ overall_alerts = joined_tables %>%
 overall_alerts
 
 
-perc_diff = overall_alerts %>% 
+perc_inc = overall_alerts %>% 
   dplyr::filter(year == 2024 | year == 2025) %>% 
   dplyr::select(year, month, Total) %>%
   dplyr::group_by(year, month) %>% 
@@ -151,7 +151,7 @@ perc_diff = overall_alerts %>%
   dplyr::mutate(dplyr::across(c(`2025`,perc_inc), ~tidyr::replace_na(.x, 0)))
 ## LOOK AT THIS
 
-perc_diff
+perc_inc
 
 #### ~~~~~~~~~~~~~~~~ How many detections has each source made? ~~~~~~~~~~~~~~~~~~~~~~~ ####
 ## Sightings numbers
