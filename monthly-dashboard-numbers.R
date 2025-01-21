@@ -147,8 +147,8 @@ perc_inc = overall_alerts %>%
   dplyr::select(year, month, Total) %>%
   dplyr::group_by(year, month) %>% 
   tidyr::pivot_wider(names_from = year, values_from = Total) %>% 
-  dplyr::mutate(perc_inc = ((`2025`-`2024`)/`2024`)*100) %>%
-  dplyr::mutate(dplyr::across(c(`2025`,perc_inc), ~tidyr::replace_na(.x, 0)))
+  dplyr::mutate(perc_inc = ((`2024`-`2023`)/`2023`)*100) %>%
+  dplyr::mutate(dplyr::across(c(`2024`,perc_inc), ~tidyr::replace_na(.x, 0)))
 ## LOOK AT THIS
 
 perc_inc
