@@ -29,6 +29,9 @@ source(file = "./data-processing.R")
 ## Send a total of 15,000 WRAS alerts (at least a 10% increase from 2024 baseline) in BC and WA waters to reduce 
 ## the risk of ship strike for at least 15,000 encounters with whales
 ## total alerts and percentage increase between 2024 and 2025
+
+source_filter = c("Ocean Wise", "Orca Network", "WhaleSpotter", "JASCO", "SMRU", "Whale Alert")
+
 joined_tables = alert_clean %>% 
   dplyr::left_join(detections_clean, 
                    dplyr::join_by(sighting_id == id)
@@ -46,15 +49,9 @@ joined_tables = alert_clean %>%
                     stringr::str_detect(source_entity, "Whale Alert") == T ~ "Whale Alert",
                     TRUE ~ source_entity)) %>% 
   dplyr::distinct() %>% 
-  dplyr::filter(source_entity != "TEST")
+  dplyr::filter(source_entity %in% source_filter)
 
 ## Create a filter to remove users who may be inflating the alert numbers - SIMRES / SMRU testers etc
-# joined_tables %>% 
-#   dplyr::group_by(tracking_id)%>% 
-#   dplyr::summarise(count = dplyr::n()) %>% 
-#   dplyr::left_join(user_clean, by = dplyr::join_by(tracking_id)) %>% 
-#   dplyr::arrange(desc(count)) %>% 
-#   head(.,20,30)
 ## Filter
 ignore_ids = 
   c(
@@ -95,7 +92,10 @@ interim_1 = interim_1 %>% dplyr::left_join(
 
 joined_tables = dplyr::bind_rows(interim_1, interim_2) %>%
   dplyr::filter(!auth_id %in% ignore_ids)
+
 # still a few NAs in lat but I just will have to filter these out. 
+
+
 
 overall_alerts = joined_tables %>% 
   dplyr::distinct() %>% 

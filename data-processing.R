@@ -11,16 +11,16 @@
 ## "user" 
 library(magrittr)
 
-user = "AlexMitchell"
+# user = "AlexMitchell"
 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Import~~~~~~~~~~~~~~~~~~~~~~~####
 
-## API query to get sightings data from the sightings database without downloading the whole dataset... 
+## API query to get sightings data from the sightings database without downloading the whole dataset...
 
 ## Basic params
 # base_url = "https://sightingsapi.ocean.org/sightings"
 # api_key = "rkcAx0oi7F9O0S7ZOOb482PMePhVCrk55jxpB60G"
-# 
+#
 # params = list(
 #   api_key = api_key,
 #   limit = 100,
@@ -34,42 +34,42 @@ user = "AlexMitchell"
 #    data <- content$sightings
 #    return(data)
 #  }
-# 
+#
 # flatten_record <- function(record) {
 #    record$additionalProperties <- NULL
 #    purrr::list_flatten(record)
 #  }
-# 
+#
 #  all_data <- list()
-# 
+#
 #  repeat {
 #    data = fetch_data(base_url, params)
-# 
+#
 #    data_df = purrr::map(data, flatten_record) %>%
 #      dplyr::bind_rows()
-# 
+#
 #    # if (params$page == 10) {
 #    #   break
 #    # }
-# 
+#
 #    if (length(data) == 0) {
 #      break
 #    }
-# 
+#
 #    all_data <- dplyr::bind_rows(all_data, data_df)
-# 
+#
 #    params$page = params$page + 1
 #  }
-# 
+#
 #  flattened_data = purrr::map(all_data, function(record) {
 #    # Convert each record (nested list) into a tibble
 #    tibble::as_tibble(record)
 #  })
-# 
+#
 # combined_data = all_data %>%
 #    dplyr::distinct() %>%
 #    janitor::clean_names()
-# 
+#
 #  x = combined_data %>%
 #    dplyr::mutate(date_received == date_received) %>%
 #    dplyr::filter(
