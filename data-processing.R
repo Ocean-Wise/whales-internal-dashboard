@@ -8,25 +8,23 @@
 
 ####~~~~~~~~~~~~~~~~~~~~~~Info~~~~~~~~~~~~~~~~~~~~~~~####
 ## Currently not able to automate this data process, so to download the data, ensure to change the
-## "user" 
-library(magrittr)
 
-# user = "AlexMitchell"
 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Import~~~~~~~~~~~~~~~~~~~~~~~####
 
 ## API query to get sightings data from the sightings database without downloading the whole dataset...
 
-## Basic params
+# Basic params
 # base_url = "https://sightingsapi.ocean.org/sightings"
 # api_key = "rkcAx0oi7F9O0S7ZOOb482PMePhVCrk55jxpB60G"
-#
+# 
 # params = list(
 #   api_key = api_key,
 #   limit = 100,
 #   page = 1,
 #   sourceType = "autonomous"
 # )
+# 
 # ## function to query API
 # fetch_data <- function(base_url, params) {
 #    response <- httr::GET(url = base_url, query = params, httr::add_headers(`x-api-key` = api_key))
@@ -34,42 +32,42 @@ library(magrittr)
 #    data <- content$sightings
 #    return(data)
 #  }
-#
+# 
 # flatten_record <- function(record) {
 #    record$additionalProperties <- NULL
 #    purrr::list_flatten(record)
 #  }
-#
+# 
 #  all_data <- list()
-#
+# 
 #  repeat {
 #    data = fetch_data(base_url, params)
-#
+# 
 #    data_df = purrr::map(data, flatten_record) %>%
 #      dplyr::bind_rows()
-#
+# 
 #    # if (params$page == 10) {
 #    #   break
 #    # }
-#
+# 
 #    if (length(data) == 0) {
 #      break
 #    }
-#
+# 
 #    all_data <- dplyr::bind_rows(all_data, data_df)
-#
+# 
 #    params$page = params$page + 1
 #  }
-#
+# 
 #  flattened_data = purrr::map(all_data, function(record) {
 #    # Convert each record (nested list) into a tibble
 #    tibble::as_tibble(record)
 #  })
-#
+# 
 # combined_data = all_data %>%
 #    dplyr::distinct() %>%
 #    janitor::clean_names()
-#
+# 
 #  x = combined_data %>%
 #    dplyr::mutate(date_received == date_received) %>%
 #    dplyr::filter(
@@ -92,7 +90,11 @@ file_list = list.files(paste0("C:/Users/", user, "/Ocean Wise Conservation Assoc
 
 list_of_dfs = purrr::map(file_list, ~readr::read_csv(.x) %>% 
                            janitor::clean_names() %>% 
-                           dplyr::filter(., dplyr::if_any(dplyr::starts_with("s") & dplyr::ends_with("_at"), ~ . >= as.Date("2019-01-01"))))
+                           ## filter any columns which start with "s" and finish with "_at" for dates >= 2019 jan 1st and onwards
+                           dplyr::filter(., dplyr::if_any(dplyr::starts_with("s") & dplyr::ends_with("_at"), 
+                                                          ~ . >= as.Date("2019-01-01"))))
+
+
 
 df_name = c("alert_raw", #alert recent data from database 
             "alert_historic", #alert historic data from database 
@@ -106,16 +108,16 @@ list2env(named_dfs, envir = .GlobalEnv)
 
 rm(list = c("list_of_dfs", "named_dfs", "df_name", "file_list"))
 
-sightings_spreadsheet = readxl::read_xlsx(paste0("C:/Users/", user,
+sightings_spreadsheet = openxlsx::read.xlsx(paste0("C:/Users/", user,
                                                  "/Ocean Wise Conservation Association/Whales Initiative - General/BCCSN.Groups/Sightings/Cheat Sheet Archive/BCCSN Sightings Master.xlsx"),
                                           sheet = "app") %>%
-  janitor::clean_names()
-
+  janitor::clean_names() %>% 
+  tibble::as_tibble()
 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Clean~~~~~~~~~~~~~~~~~~~~~~~####
 
 ## alert cleaning
-alert_clean = alert_historic %>% 
+alert_clean = alert_historic %>%
   dplyr::bind_rows(alert_raw) %>% 
   dplyr::select(-location_id) %>% 
   dplyr::distinct()
@@ -123,23 +125,30 @@ alert_clean = alert_historic %>%
   
 ## sightings spreadsheet cleaning
 sightings_clean = sightings_spreadsheet %>% 
-  dplyr::select(sub_date, sub_time, id = report_id, species = species_name, ecotype, species_category,
+  dplyr::mutate(date = as.Date(date, origin = "1899-12-30"),
+                time = time * 86400,
+                date_time = as.POSIXct(date) + time,
+                sub_date_time = strptime(stringr::str_extract(source_name, 
+                                                              "(?<=Report)[0-9\\- ]+"), 
+                                         format = "%Y-%m-%d %H-%M-%S")) %>% 
+  ## using the = in here just renames column in the format new name = old name - i.e. id = report_id
+  dplyr::select(sub_date_time, date_time, id = report_id, species = species_name, ecotype,
                 species_category, latitude = latitude_dd, longitude = longitude_dd,
-                date, time, number_of_animals, email = reporter_email, organization = db_org,
+                number_of_animals, email = reporter_email, organization = db_org,
                 confidence = id_confidence) %>% 
-  dplyr::mutate(time = format(time, "%H:%M:%S"),
-                date = lubridate::as_date(date)) %>% 
-  dplyr::mutate(date = lubridate::as_datetime(paste(date, time))) %>% 
-  dplyr::select(-time)
+  dplyr::mutate(latitude = as.numeric(latitude),
+                longitude = as.numeric(longitude),
+                number_of_animals = as.numeric(number_of_animals)) %>% 
+  dplyr::distinct()
 
 
 ## Detection cleaning
 detections_clean = detection_historic %>% 
   dplyr::mutate(sighted_at = lubridate::ymd_hm(detection_historic$sighted_at),
                 created_at = lubridate::ymd_hm(detection_historic$created_at)) %>%
-    dplyr::bind_rows(
-      dplyr::anti_join(detection_recent, .)
-    ) %>% 
+    dplyr::bind_rows(detection_recent) %>% 
+  dplyr::distinct() %>% 
+  ## The following steps turn the "details" column into individual columns which contain data
   dplyr::mutate(details = stringr::str_remove_all(details, "[\\\\\"{}]")) %>% 
   dplyr::mutate(details = stringr::str_remove(details, "^[^:]+:")) %>% 
   dplyr::mutate(details = stringr::str_replace_all(details, "\\s*:\\s*", ":")) %>%
@@ -152,9 +161,11 @@ detections_clean = detection_historic %>%
   dplyr::mutate(colname = stringr::str_replace(colname, "id", "value")) %>% 
   dplyr::mutate(colname = stringr::str_replace(colname, "name", "species")) %>% 
   dplyr::mutate(colname = stringr::str_trim(colname)) %>% 
+  ## Always group by ID to let R know the records are related
   dplyr::group_by(id) %>% 
   dplyr::mutate(dplyr::across(where(is.character), ~ dplyr::na_if(., ""))) %>% 
   # dplyr::select(-c("category", "direction")) %>% 
+  ## This then creates the individual columns by pivoting the data from long format to WIDE format
   tidyr::pivot_wider(names_from = colname, values_from = data) %>% 
   janitor::clean_names() %>% 
   janitor::remove_empty(which = "cols")
@@ -162,8 +173,7 @@ detections_clean = detection_historic %>%
 
   ## user cleaning
 user_clean = user_raw %>%
-  dplyr::select(c(id, auth_id, name, phonenumber, organization, vessel = vesselname)) %>% 
-  dplyr::rename(tracking_id = id)
+  dplyr::select(c(tracking_id = id, auth_id, name, phonenumber, organization, vessel = vesselname))
 
 
   ####~~~~~~~~~~~~~~~~~~~~~~Data tidy~~~~~~~~~~~~~~~~~~~~~~~####

@@ -22,6 +22,7 @@ user = "AlexMitchell"
 
 ##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
 
+## Runs the data-processing.R file from the R Project - this saves you from opening the other file and means we set the user here. 
 source(file = "./data-processing.R")
 
 ####~~~~~~~~~~~~~~~~~~~~~~# WRAS alerts vs 2023~~~~~~~~~~~~~~~~~~~~~~~####
@@ -147,8 +148,8 @@ perc_inc = overall_alerts %>%
   dplyr::select(year, month, Total) %>%
   dplyr::group_by(year, month) %>% 
   tidyr::pivot_wider(names_from = year, values_from = Total) %>% 
-  dplyr::mutate(perc_inc = ((`2024`-`2023`)/`2023`)*100) %>%
-  dplyr::mutate(dplyr::across(c(`2024`,perc_inc), ~tidyr::replace_na(.x, 0)))
+  dplyr::mutate(perc_inc = ((`2025`-`2024`)/`2024`)*100) %>%
+  dplyr::mutate(dplyr::across(c(`2025`,perc_inc), ~tidyr::replace_na(.x, 0)))
 ## LOOK AT THIS
 
 perc_inc
@@ -172,7 +173,7 @@ sights_pre = detections_clean %>%
   dplyr::select(-c(created_at, id, code)) %>%  # do this to remove errors caused by bugs which led to duplicates sent at same time with different
   dplyr::distinct()                             # created_at values
 
-sights = sights_pre %>%  
+detections = sights_pre %>%  
   dplyr::group_by(year_mon = zoo::as.yearmon(sighted_at), source_entity) %>% 
   dplyr::summarise(n = dplyr::n()) %>%
   tidyr::pivot_wider(names_from = source_entity,
@@ -191,7 +192,7 @@ sights = sights_pre %>%
     `Cumulative Fin Island` = cumsum(`Fin Island`),
     Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU + `Whale Alert Alaska` + `Fin Island`))
 
-sights
+detections
 
 #### ~~~~~~~~~~~~~~~~ Where are the automated detection methods? ~~~~~~~~~~~~~~~~~~~~~~~ ####
  locations = tibble::tibble(
