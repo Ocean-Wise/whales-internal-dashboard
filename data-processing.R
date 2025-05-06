@@ -14,7 +14,7 @@
 
 ## API query to get sightings data from the sightings database without downloading the whole dataset...
 
-# Basic params
+# # Basic params
 # base_url = "https://sightingsapi.ocean.org/sightings"
 # api_key = "rkcAx0oi7F9O0S7ZOOb482PMePhVCrk55jxpB60G"
 # 
@@ -168,17 +168,36 @@ detections_clean = detection_historic %>%
   ## This then creates the individual columns by pivoting the data from long format to WIDE format
   tidyr::pivot_wider(names_from = colname, values_from = data) %>% 
   janitor::clean_names() %>% 
-  janitor::remove_empty(which = "cols")
+  janitor::remove_empty(which = "cols") %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(source_entity =
+                  dplyr::case_when(
+                    is.na(source_entity) == T ~ "Ocean Wise",
+                    stringr::str_detect(source_entity, "Ocean Wise") == T ~ "Ocean Wise",
+                    stringr::str_detect(source_entity, "Acartia") == T ~ "Orca Network",
+                    stringr::str_detect(source_entity, "Orca Network") == T ~ "Orca Network",
+                    stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
+                    stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
+                    stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
+                    stringr::str_detect(source_entity, "Whale Alert") == T ~ "Whale Alert",
+                    stringr::str_detect(source_entity, "SWAG") == T ~ "SWAG",
+                    TRUE ~ "test")) %>% 
+  dplyr::filter(source_entity != "test")
 
 
-  ## user cleaning
+## user cleaning
 user_clean = user_raw %>%
   dplyr::select(c(tracking_id = id, auth_id, name, phonenumber, organization, vessel = vesselname))
 
 
   ####~~~~~~~~~~~~~~~~~~~~~~Data tidy~~~~~~~~~~~~~~~~~~~~~~~####
  
-  
+rm(list = c("alert_historic", 
+            "alert_raw", 
+            "detection_historic", 
+            "detection_recent",
+            "sightings_spreadsheet",
+            "user_raw"))
   
   
   

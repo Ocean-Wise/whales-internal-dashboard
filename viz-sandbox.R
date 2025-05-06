@@ -545,13 +545,14 @@ overall_alerts %>%
 ### IMPORT DATA ###
 
 users_overall = readxl::read_xlsx(
-  "C:/Users/AlexMitchell/Ocean Wise Conservation Association/Whales Initiative - General/BCCSN.Groups/WhaleReport Alert System/Participants/WRASUSERS_main.xlsx",
+  "C:/Users/AlexMitchell/Ocean Wise Conservation Association/Whales Initiative - General/BCCSN.Groups/Whale Report Alert System/Participants/WRASUSERS_main.xlsx",
   sheet = "Authorized"
 ) %>% 
-  janitor::clean_names()
+  janitor::clean_names() %>% 
+  dplyr::mutate(approval_date = janitor::excel_numeric_to_date(as.numeric(approval_date)))
   
 users_cumulative = users_overall %>% 
-  # dplyr::filter(region_clean == "USA") %>% 
+  dplyr::filter(region_clean == "USA") %>%
   dplyr::group_by(year_qtr = zoo::as.yearqtr(approval_date), org_type) %>%
   dplyr::summarise(count = dplyr::n()) %>% 
   dplyr::group_by(org_type) %>% 
@@ -718,7 +719,7 @@ users_cumulative %>%
 
  ## Sightings
 sight_map = sightings_clean %>%
- dplyr::filter(lubridate::year(date) == 2024) %>%  
+ dplyr::filter(lubridate::year(date_time) == 2024) %>%  
                # & dplyr::between(lubridate::month(date), 1,10 )) %>%
  dplyr::mutate(species = 
                  dplyr::case_when(
@@ -745,8 +746,8 @@ sight_map = sightings_clean %>%
 dplyr::mutate(
   popup_content = ifelse(
     !is.na(ecotype),
-    paste("<b>Species:</b> ", species, "<b><br>Ecotype:</b> ", ecotype, "<b><br>Date:</b>", as.Date(date)),
-    paste("<b>Species:</b> ", species, "<b><br>Date:</b> ", as.Date(date))
+    paste("<b>Species:</b> ", species, "<b><br>Ecotype:</b> ", ecotype, "<b><br>Date:</b>", as.Date(date_time)),
+    paste("<b>Species:</b> ", species, "<b><br>Date:</b> ", as.Date(date_time))
   )
 ) 
 
@@ -770,17 +771,18 @@ sight_map %>%
     opacity = 0.8
    ) %>% 
   leaflet::addMiniMap(toggleDisplay = TRUE) %>%
-  htmltools::save_html(., paste0("C:/Users/", 
-                                 user, 
-                                 "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/",
-                                 "sightings-map-",
-                                 Sys.Date(),
-                                 ".html"))
+  # htmltools::save_html(., paste0("C:/Users/", 
+  #                                user, 
+  #                                "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/",
+  #                                "sightings-map-",
+  #                                Sys.Date(),
+  #                                ".html"))
 
 ## Alerts
 
 alert_map = joined_tables %>%
-  dplyr::filter(lubridate::year(sent_at) == 2024) %>%
+  # dplyr::filter(lubridate::year(sent_at) == 2024) %>%
+  dplyr::filter(dplyr::between(sent_at, as.Date("2024-04-01"), as.Date("2025-03-31"))) %>% 
   dplyr::mutate(col_palette =
                   dplyr::case_when(
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "#A569BD",
@@ -838,16 +840,18 @@ htmltools::save_html(., paste0("C:/Users/",
   
 
 ## Heat map
-leaflet::leaflet(alert_map, 
-                 options = leaflet::leafletOptions(zoomDelta = 0.1, zoomSnap = 0.1)) %>% 
-  # leaflet::addTiles(urlTemplate = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png") %>%
+alert_map %>% 
+  dplyr::filter(is.na(latitude) == F) %>% 
+  leaflet::leaflet() %>% 
   leaflet::addProviderTiles("CartoDB.Positron") %>%
   leaflet.extras::addHeatmap(
     lng = ~longitude,
     lat = ~latitude,
-    blur = 2, 
-    max = 0.1, 
-    radius = 5) 
+    minOpacity = 0.05,
+    max = 0.05,
+    radius = 15,
+    blur = 5) %>% 
+  leaflet::addMiniMap(toggleDisplay = TRUE)
 # %>% 
 #   htmltools::save_html(., paste0("C:/Users/", 
 #                                  user, 
@@ -927,6 +931,84 @@ x = detections_clean %>%
 
 ######################### SANDBOX ######################################
 
+
+## Map of sightings in US
+
+us_sightings = sights_pre %>% 
+  dplyr::filter(is.na(latitude) == F) %>% 
+  dplyr::filter(sighted_at >= as.Date("2023-01-01")) %>% 
+  sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
+  sf::st_make_valid() %>% 
+  sf::st_join(x = ., 
+              y = US_EZZ,
+              join = sf::st_within) %>% 
+  dplyr::filter(GEONAME == "United States Exclusive Economic Zone") %>%
+  dplyr::select(sighted_at, species,number_of_animals,source_entity)
+  
+
+us_map = us_sightings %>% 
+  dplyr::mutate(species = 
+                  dplyr::case_when(
+                    stringr::str_detect(species, "dolphin") ~ "Dolphin/Porpoise species",
+                    stringr::str_detect(species, "porpoise") ~ "Dolphin/Porpoise species",
+                    stringr::str_detect(species, "turtle") ~ "Potential Turtle species",
+                    stringr::str_detect(species, "False") ~ "Dolphin/Porpoise species",
+                    stringr::str_detect(species, "Sei") ~ "Unidentified whale",
+                    .default = as.character(species)
+                  )) %>% 
+  dplyr::mutate(col_palette =
+                  dplyr::case_when(
+                    species == "Minke whale" ~ "#A569BD",
+                    species == "Killer whale" ~ "#17202A",
+                    species == "Humpback whale" ~ "#E74C3C",
+                    species == "Fin whale" ~ "#F4D03F",
+                    species == "Dolphin/Porpoise species" ~ "#566573",
+                    species == "Grey whale" ~ "#AAB7B8",
+                    species == "Dolphin species" ~ "#1ABC9C",
+                    species == "Sperm whale" ~ "blue",
+                    species == "Unidentified whale" ~ "#B7950B",
+                    species == "Potential Turtle species" ~ "darkgreen" 
+                  )) %>%
+  dplyr::mutate(
+    popup_content =
+      paste("<b>Species:</b> ", species,
+            "<b><br>Source:</b> ", source_entity,
+            "<b><br>Date:</b>", as.Date(sighted_at)
+      )) %>% 
+  leaflet::leaflet() %>%
+  leaflet::addTiles() %>%
+  leaflet::addCircleMarkers(
+    radius = 3,
+    group = ~species,
+    color = ~col_palette,
+    fillOpacity = 0.8,
+    opacity = 0.8,
+    popup = ~popup_content
+  ) %>%
+  leaflet::addLegend(
+    "bottomright",
+    colors = c(unique(sight_map$col_palette)),
+    labels = c(unique(sight_map$species)),
+    opacity = 0.8
+  ) %>% 
+  leaflet::addMiniMap(toggleDisplay = TRUE) 
+
+## Save map
+htmlwidgets::saveWidget(us_map, paste0("C:/Users/",
+                                 user,
+                                 "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/",
+                                 "US-sightings-map-",
+                                 Sys.Date(),
+                                 ".html"),
+                        selfcontained = TRUE)
+
+write.csv()
+
+
+
+
+
+
 # 
 # overall_alerts %>% 
 #   dplyr::ungroup() %>% 
@@ -983,8 +1065,178 @@ x = detections_clean %>%
 #                  ),
 
 
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+# 
+# ## Fiscal table detections
+# 
+# joined_tables %>% 
+#   dplyr::distinct() %>% 
+#   dplyr::group_by(
+#     year = lubridate::year(sent_at), 
+#     month = lubridate::month(sent_at),
+#     source = source_entity
+#   ) %>% 
+#   dplyr::summarise(
+#     count = dplyr::n()) %>% 
+#   # dplyr::filter(
+#   # year == 2023 | year == 2024) %>%
+#   dplyr::mutate(date = lubridate::as_date(paste0(year,"/",month,"/01"))) %>% 
+#   tidyr::pivot_wider(
+#     names_from = source,
+#     values_from = count
+#   ) %>% 
+#   dplyr::mutate(
+#     dplyr::across(
+#       dplyr::everything(), ~tidyr::replace_na(.x, 0))
+#   ) %>% 
+#   dplyr::group_by(year) %>% 
+#   dplyr::mutate(
+#     `Cumulative Ocean Wise` = cumsum(`Ocean Wise`),
+#     `Cumulative Orca Network` = cumsum(`Orca Network`),
+#     `Cumulative WhaleSpotter` = cumsum(`WhaleSpotter`),
+#     `Cumulative JASCO` = cumsum(JASCO),
+#     `Cumulative SMRU` = cumsum(SMRU),
+#     `Cumulative Whale Alert` = cumsum(`Whale Alert`),
+#     Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU + `Whale Alert`)
+#   ) %>% 
+#   dplyr::mutate(
+#     `Ocean Wise %` = (`Cumulative Ocean Wise`/Total)*100,
+#     `Orca Network %` = (`Cumulative Orca Network`/Total)*100,
+#     `JASCO %` = (`Cumulative JASCO`/Total)*100,
+#     `WhaleSpotter %` = (`Cumulative WhaleSpotter`/Total)*100,
+#     `SMRU %` = (`Cumulative SMRU`/Total)*100,
+#     `Whale Alert %` = (`Cumulative Whale Alert`/Total)*100
+#   ) 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# ## Fiscal table detections
+# 
+# joined_tables %>% 
+#   dplyr::distinct() %>% 
+#   dplyr::group_by(
+#     year = lubridate::year(sent_at), 
+#     month = lubridate::month(sent_at),
+#     source = source_entity
+#   ) %>% 
+#   dplyr::summarise(
+#     count = dplyr::n()) %>% 
+#   # dplyr::filter(
+#   # year == 2023 | year == 2024) %>%
+#   dplyr::mutate(date = lubridate::as_date(paste0(year,"/",month,"/01"))) %>% 
+#   tidyr::pivot_wider(
+#     names_from = source,
+#     values_from = count
+#   ) %>% 
+#   dplyr::mutate(
+#     dplyr::across(
+#       dplyr::everything(), ~tidyr::replace_na(.x, 0))
+#   ) %>% 
+#   dplyr::group_by(year) %>% 
+#   dplyr::mutate(
+#     `Cumulative Ocean Wise` = cumsum(`Ocean Wise`),
+#     `Cumulative Orca Network` = cumsum(`Orca Network`),
+#     `Cumulative WhaleSpotter` = cumsum(`WhaleSpotter`),
+#     `Cumulative JASCO` = cumsum(JASCO),
+#     `Cumulative SMRU` = cumsum(SMRU),
+#     `Cumulative Whale Alert` = cumsum(`Whale Alert`),
+#     Total = cumsum(`Ocean Wise` + JASCO + `WhaleSpotter` + `Orca Network` + SMRU + `Whale Alert`)
+#   ) %>% 
+#   dplyr::mutate(
+#     `Ocean Wise %` = (`Cumulative Ocean Wise`/Total)*100,
+#     `Orca Network %` = (`Cumulative Orca Network`/Total)*100,
+#     `JASCO %` = (`Cumulative JASCO`/Total)*100,
+#     `WhaleSpotter %` = (`Cumulative WhaleSpotter`/Total)*100,
+#     `SMRU %` = (`Cumulative SMRU`/Total)*100,
+#     `Whale Alert %` = (`Cumulative Whale Alert`/Total)*100
+#   ) 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# ## Fiscal Sightings
+# #total
+# detections_clean %>% 
+#   dplyr::filter(dplyr::between(sighted_at, as.Date("2023-04-01"), as.Date("2025-03-31"))) %>% 
+#   dplyr::mutate(fiscal = 
+#                   dplyr::case_when(
+#                     dplyr::between(sighted_at, as.Date("2023-04-01"), as.Date("2024-03-31")) ~ "23/24",
+#                     dplyr::between(sighted_at, as.Date("2024-04-01"), as.Date("2025-03-31")) ~ "24/25"
+#                   )
+#                 ) %>% 
+#   dplyr::select(id, sighted_at, species, fiscal, source_entity) %>% 
+#   dplyr::distinct() %>% 
+#   dplyr::group_by(fiscal) %>% 
+#   dplyr::summarise(count = dplyr::n())
+# 
+# #table
+# detections_clean %>% 
+#   dplyr::filter(dplyr::between(sighted_at, as.Date("2023-04-01"), as.Date("2025-03-31"))) %>% 
+#   dplyr::mutate(fiscal = 
+#                   dplyr::case_when(
+#                     dplyr::between(sighted_at, as.Date("2023-04-01"), as.Date("2024-03-31")) ~ "23/24",
+#                     dplyr::between(sighted_at, as.Date("2024-04-01"), as.Date("2025-03-31")) ~ "24/25"
+#                   )
+#   ) %>% 
+#   dplyr::select(id, sighted_at, species, fiscal, source_entity) %>% 
+#   dplyr::distinct() %>%
+#   dplyr::group_by(fiscal, source_entity) %>% 
+#   dplyr::summarise(count = dplyr::n())
+# 
+# 
+# 
+## Fiscal Alerts
+# total
+joined_tables %>%
+  dplyr::filter(dplyr::between(sent_at, as.Date("2023-04-01"), as.Date("2025-03-31"))) %>%
+  dplyr::mutate(fiscal =
+                  dplyr::case_when(
+                    dplyr::between(sent_at, as.Date("2023-04-01"), as.Date("2024-03-31")) ~ "23/24",
+                    dplyr::between(sent_at, as.Date("2024-04-01"), as.Date("2025-03-31")) ~ "24/25"
+                  )
+  ) %>%
+  dplyr::select(id, sent_at, species, fiscal, source_entity) %>%
+  dplyr::distinct() %>%
+  dplyr::group_by(fiscal) %>%
+  dplyr::summarise(count = dplyr::n())
 
-
+# table
+joined_tables %>%
+  dplyr::filter(dplyr::between(sent_at, as.Date("2023-04-01"), as.Date("2025-03-31"))) %>%
+  dplyr::mutate(fiscal =
+                  dplyr::case_when(
+                    dplyr::between(sent_at, as.Date("2023-04-01"), as.Date("2024-03-31")) ~ "23/24",
+                    dplyr::between(sent_at, as.Date("2024-04-01"), as.Date("2025-03-31")) ~ "24/25"
+                  )
+  ) %>%
+  dplyr::select(id, sent_at, species, fiscal, source_entity) %>%
+  dplyr::mutate(kw = dplyr::case_when(
+    stringr::str_detect(species, "Killer") ~ 1,
+    TRUE ~ 0
+  )) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate() %>%
+  dplyr::group_by(fiscal, source_entity
+                  , kw
+                  ) %>%
+  dplyr::summarise(count = dplyr::n())
 
 
 
