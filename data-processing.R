@@ -10,7 +10,7 @@
 ## Currently not able to automate this data process, so to download the data, ensure to change the
 
 
-####~~~~~~~~~~~~~~~~~~~~~~Data Import~~~~~~~~~~~~~~~~~~~~~~~####
+####~~~~~~~~~~~~~~~~~~~~~~Data Import API ~~~~~~~~~~~~~~~~~~~~~~~####
 
 ## API query to get sightings data from the sightings database without downloading the whole dataset...
 
@@ -81,6 +81,8 @@
 #    !stringr::str_detect(reporter_email, "(?i)test")
 #  )
 
+
+####~~~~~~~~~~~~~~~~~~~~~~Data Import - non-API~~~~~~~~~~~~~~~~~~~~~~~####
  
 ## Get a list of files in the directory which we want to get the data from. It is important that older files are overwritten, not added. 
 file_list = list.files(paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/"), full.names = T) %>% 
