@@ -19,7 +19,6 @@ library(magrittr)
 ## UPDATE THIS TO YOUR USERNAME 
 user = "AlexMitchell"
 
-
 ##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
 
 ## Runs the data-processing.R file from the R Project - this saves you from opening the other file and means we set the user here. 
@@ -43,7 +42,6 @@ alerts_detections = alert_clean %>%
                     stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
                     stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
                     stringr::str_detect(source_entity, "Whale Alert") == T ~ "Whale Alert",
-                    "BCHN/SWAG" == T ~ "BCHN/SWAG",
                     TRUE ~ source_entity)) %>% 
   dplyr::distinct() %>% 
   dplyr::filter(source_entity %in% source_filter)
@@ -100,8 +98,7 @@ overall_alerts = joined_tables %>%
   dplyr::group_by(
     year = lubridate::year(sent_at),
     month = lubridate::month(sent_at),
-    source = source_entity,
-    species
+    source = source_entity
   ) %>%
   dplyr::summarise(
     count = dplyr::n()) %>%
@@ -140,10 +137,17 @@ overall_alerts = joined_tables %>%
 ## LOOK AT THIS
 overall_alerts
 
+## Total alerts in database - testers receiving many alerts
+total_alerts = nrow(joined_tables)
+
 
 perc_inc = overall_alerts %>%
+  # dplyr::select(-species) %>%
+  # dplyr::group_by(year,month, Total) %>% 
+  # dplyr::
   dplyr::filter(year == 2024 | year == 2025) %>%
   dplyr::select(year, month, Total) %>%
+  # dplyr::ungroup() %>% 
   dplyr::group_by(year, month) %>%
   tidyr::pivot_wider(names_from = year, values_from = Total) %>%
   dplyr::mutate(perc_inc = ((`2025`-`2024`)/`2024`)*100) %>%
@@ -187,10 +191,10 @@ detections
 
 #### ~~~~~~~~~~~~~~~~ Where are the automated detection methods? ~~~~~~~~~~~~~~~~~~~~~~~ ####
 # locations = tibble::tibble(
-#   station_name = c("Fin Island", "Lime Kiln", "Boundary Pass", "Carmanah Lighthouse", "Active Pass North", "Active Pass South", "Saturna Island"),
-#   station_type = c("hydrophone", "hydrophone","hydrophone","infrared camera","infrared camera","infrared camera","infrared camera"),
-#   latitude = c(53.211, 48.515834, 48.773653, 48.611406, 48.877781, 48.857528, 48.792393),
-#   longitude = c(-129.498, -123.152978,  -123.042226, -124.751156, -123.316408, -123.344047, -123.096821))
+#   station_name = c("Lime Kiln", "Boundary Pass", "Carmanah Lighthouse", "Active Pass North", "Active Pass South", "Saturna Island"),
+#   station_type = c("hydrophone","hydrophone","infrared camera","infrared camera","infrared camera","infrared camera"),
+#   latitude = c(48.515834, 48.773653, 48.611406, 48.877781, 48.857528, 48.792393),
+#   longitude = c(-123.152978,  -123.042226, -124.751156, -123.316408, -123.344047, -123.096821))
 # #
 # #
 # # ## Map of locations with icons
