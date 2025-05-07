@@ -14,9 +14,16 @@
 
 ##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
 
+# update this for the start date of period
+start_date = as.Date("2024-04-01")
+
+# update this for the end date of period
+end_date = as.Date("2025-03-31")
+
+
 ## Year on year growth of detection and alerts
 
-sightings_yearly = sights %>% 
+sightings_yearly = detections %>% 
   dplyr::select(1:8) %>%
   dplyr::group_by(year_mon) %>% 
   tidyr::pivot_longer(!c(year,year_mon), names_to = "source", values_to = "count") %>% 
@@ -37,25 +44,25 @@ wras_growth = sightings_yearly %>%
   tidyr::pivot_longer(cols = c(detection_count, alert_count),
                       names_to = "type",
                       values_to = "count") %>% 
-  ggplot(aes(x = year_mon, y = count, color = type)) +
-  geom_smooth(method = "loess", span = 0.2, se = FALSE, size = 1) +
+  ggplot2::ggplot(ggplot2::aes(x = year_mon, y = count, color = type)) +
+  ggplot2::geom_smooth(method = "loess", span = 0.2, se = FALSE, size = 1) +
   # geom_line(linewidth = 1, linejoin = "round") +
-  scale_color_manual(values = c("#A8007E", "#AAAC24")) +
+  ggplot2::scale_color_manual(values = c("#A8007E", "#AAAC24")) +
   zoo::scale_x_yearmon(format = "%b %Y", n = 10) + # Format yearmon axis
   # scale_y_continuous(labels = comma) +
-  labs(
+  ggplot2::labs(
     title = "",
     x = "",
     y = ""
   ) +
-  theme_minimal() +
-  theme(
-    panel.grid.major.x = element_blank(), # Remove major vertical grid lines
-    panel.grid.minor.x = element_blank(),  # Remove minor vertical grid lines
-    axis.text.x = element_text(size = 14), # Increase x-axis text size
-    axis.text.y = element_text(size = 14), # Increase y-axis text size
-    axis.title.x = element_text(size = 16), # Increase x-axis title size
-    axis.title.y = element_text(size = 16)  # Increase y-axis title size
+  ggplot2::theme_minimal() +
+  ggplot2::theme(
+    panel.grid.major.x = ggplot2::element_blank(), # Remove major vertical grid lines
+    panel.grid.minor.x = ggplot2::element_blank(),  # Remove minor vertical grid lines
+    axis.text.x = ggplot2::element_text(size = 14), # Increase x-axis text size
+    axis.text.y = ggplot2::element_text(size = 14), # Increase y-axis text size
+    axis.title.x = ggplot2::element_text(size = 16), # Increase x-axis title size
+    axis.title.y = ggplot2::element_text(size = 16)  # Increase y-axis title size
     )
   
   
@@ -68,7 +75,7 @@ wras_growth = sightings_yearly %>%
 
 ## All real-time sightings, not just sightings that led to alerts
 
-sights_props = sights %>%
+sights_props = detections %>%
   dplyr::select(-year) %>% 
   tidyr::pivot_longer(
     !year_mon,
@@ -116,8 +123,9 @@ sights_species = sights_pre %>%
     species_id == 27 ~ "unidentified sea turtle"
   )) %>% 
   dplyr::group_by(year = lubridate::year(sighted_at), month = lubridate::month(sighted_at), species_id) %>% 
+  dplyr::filter(dplyr::between(sighted_at, start_date, end_date)) %>% 
   dplyr::summarise(count = dplyr::n()) %>% 
-  dplyr::filter(year == 2024 & month < 8) %>%
+  # dplyr::filter(year == 2024 & month < 8) %>%
   dplyr::ungroup() %>% 
   dplyr::group_by(month) %>%
   dplyr::arrange(desc(count), .by_group = TRUE) %>% 
@@ -306,7 +314,7 @@ vfpa_data = joined_tables %>% dplyr::filter(source_entity == "SMRUC") %>%
 #### ~~~~~~~~~~~ Alerts ~~~~~~~~~~~ ####
 
 alert_prop = overall_alerts %>% 
-  dplyr::filter(date > as.Date("2022-03-01") & date < Sys.Date()) %>% 
+  dplyr::filter(dplyr::between(date, start_date, end_date)) %>% 
   dplyr::select(1:9) %>% 
   dplyr::ungroup() %>% 
   tidyr::pivot_longer(cols = `Ocean Wise`:`Whale Alert`,
@@ -394,7 +402,7 @@ alert_bar %>%
 
 
 ### Hydrophone alerts
-sights %>% 
+detections %>% 
   dplyr::ungroup() %>% 
   dplyr::select(c(year_mon, sightigns_jasco = JASCO, sightings_smru = SMRU)) %>% 
   dplyr::mutate(cum_sightings_smru = cumsum(sightings_smru),
