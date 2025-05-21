@@ -14,76 +14,65 @@
 
 ## API query to get sightings data from the sightings database without downloading the whole dataset...
 
-# # Basic params
 # base_url = "https://sightingsapi.ocean.org/sightings"
-# api_key = "rkcAx0oi7F9O0S7ZOOb482PMePhVCrk55jxpB60G"
+# api_key = "5w6lyNFD0q6nQMyWEJxgx7FiDLfvKcrg44AdCN9U"
 # 
 # params = list(
 #   api_key = api_key,
 #   limit = 100,
 #   page = 1,
-#   sourceType = "autonomous"
+#   sourceType = "observed"
 # )
 # 
-# ## function to query API
-# fetch_data <- function(base_url, params) {
-#    response <- httr::GET(url = base_url, query = params, httr::add_headers(`x-api-key` = api_key))
-#    content <- httr::content(response, as = "parsed")
-#    data <- content$sightings
-#    return(data)
-#  }
+# # Function to query API
+# fetch_data = function(base_url, params) {
+#   response = httr::GET(
+#     url = base_url,
+#     query = params,
+#     httr::add_headers(`x-api-key` = api_key)
+#   )
+#   content = httr::content(response, as = "parsed")
+#   content$sightings
+# }
 # 
-# flatten_record <- function(record) {
-#    record$additionalProperties <- NULL
-#    purrr::list_flatten(record)
-#  }
+# # Function to flatten a single record
+# flatten_record = function(record) {
+#   record$additionalProperties = NULL
+#   purrr::list_flatten(record)
+# }
 # 
-#  all_data <- list()
+# # Fetch and combine all pages
+# all_data = list()
 # 
-#  repeat {
-#    data = fetch_data(base_url, params)
+# repeat {
+#   data = fetch_data(base_url, params)
+#   
+#   if (length(data) == 0) break
+#   
+#   data_df = purrr::map_dfr(data, flatten_record)
+#   all_data = dplyr::bind_rows(all_data, data_df)
+#   
+#   params$page = params$page + 1
+# }
 # 
-#    data_df = purrr::map(data, flatten_record) %>%
-#      dplyr::bind_rows()
-# 
-#    # if (params$page == 10) {
-#    #   break
-#    # }
-# 
-#    if (length(data) == 0) {
-#      break
-#    }
-# 
-#    all_data <- dplyr::bind_rows(all_data, data_df)
-# 
-#    params$page = params$page + 1
-#  }
-# 
-#  flattened_data = purrr::map(all_data, function(record) {
-#    # Convert each record (nested list) into a tibble
-#    tibble::as_tibble(record)
-#  })
-# 
+# # Clean and filter
 # combined_data = all_data %>%
-#    dplyr::distinct() %>%
-#    janitor::clean_names()
+#   dplyr::distinct() %>%
+#   janitor::clean_names() %>%
+#   dplyr::filter(source_entity == "Ocean Wise" | is.na(source_entity) == T) %>% 
+#   dplyr::filter(
+#     !stringr::str_detect(location_desc, "(?i)\\btest\\b"),
+#     !stringr::str_detect(comments, "(?i)\\btest\\b"),
+#     !stringr::str_detect(reporter_email, "(?i)\\btest\\b"),
+#     !stringr::str_detect(reporter_name, "(?i)\\btest\\b")
+#   )
 # 
-#  x = combined_data %>%
-#    dplyr::mutate(date_received == date_received) %>%
-#    dplyr::filter(
-#        !stringr::str_detect(location_desc, "(?i)test")) %>%
-#    dplyr::filter(
-#        !stringr::str_detect(source_entity, "(?i)test")) %>%
-#    dplyr::filter(
-#        !stringr::str_detect(reporter_email, "(?i)test")
-#        )
-#  dplyr::filter(
-#    !stringr::str_detect(reporter_email, "(?i)test")
-#  )
-
 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Import - non-API~~~~~~~~~~~~~~~~~~~~~~~####
- 
+
+## Define a filter for the data so we can remove any org that we shouldn't have in the data
+source_filter = c("Ocean Wise", "Orca Network", "WhaleSpotter", "JASCO", "SMRU", "Whale Alert")
+
 ## Get a list of files in the directory which we want to get the data from. It is important that older files are overwritten, not added. 
 file_list = list.files(paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/"), full.names = T) %>% 
   .[. != paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/historical_data")]
@@ -117,7 +106,6 @@ sightings_spreadsheet = openxlsx::read.xlsx(paste0("C:/Users/", user,
   tibble::as_tibble()
 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Clean~~~~~~~~~~~~~~~~~~~~~~~####
-
 ## alert cleaning
 alert_clean = alert_historic %>%
   dplyr::bind_rows(alert_raw) %>% 
@@ -141,6 +129,7 @@ sightings_clean = sightings_spreadsheet %>%
   dplyr::mutate(latitude = as.numeric(latitude),
                 longitude = as.numeric(longitude),
                 number_of_animals = as.numeric(number_of_animals)) %>% 
+                ## THIS NEEDS TO BE ALTERED TO EXTRACT RANGE exp. 4~7
   dplyr::distinct()
 
 
@@ -184,7 +173,7 @@ detections_clean = detection_historic %>%
                     stringr::str_detect(source_entity, "Whale Alert") == T ~ "Whale Alert",
                     stringr::str_detect(source_entity, "SWAG") == T ~ "SWAG",
                     TRUE ~ "test")) %>% 
-  dplyr::filter(source_entity != "test")
+  dplyr::filter(source_entity != "test" & source_entity %in% source_filter)
 
 
 ## user cleaning

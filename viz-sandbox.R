@@ -94,33 +94,33 @@ sights_props = detections %>%
 ## Drop this into Excel and make a unit chart from the data
 sights_species = sights_pre %>% 
   dplyr::mutate(species_id = dplyr::case_when(
-    species_id == 1 ~ "killer whale",
-    species_id == 2 ~ "humpback whale",
-    species_id == 3 ~ "grey whale",
-    species_id == 4 ~ "minke whale",
-    species_id == 5 ~ "fin whale",
-    species_id == 6 ~ "sperm whale",
-    species_id == 7 ~ "blue whale",
-    species_id == 8 ~ "sei whale",
-    species_id == 9 ~ "north pacific right whale",
-    species_id == 10 ~ "bairds beaked whale",
-    species_id == 11 ~ "cuviers beaked whale",
-    species_id == 12 ~ "other rare whale",
-    species_id == 13 ~ "unidentified whale",
-    species_id == 14 ~ "killer whale",
-    species_id == 15 ~ "harbour porpoise",
-    species_id == 16 ~ "dalls porpoise",
-    species_id == 17 ~ "pacific white-sided dolphin",
-    species_id == 18 ~ "rissos dolphin",
-    species_id == 19 ~ "northern right whale dolphin",
-    species_id == 20 ~ "false killer whale",
-    species_id == 21 ~ "common dolphin",
-    species_id == 22 ~ "unidentified dolphin or porpoise",
-    species_id == 23 ~ "leatherback sea turtle",
-    species_id == 24 ~ "green sea turtle",
-    species_id == 25 ~ "olive ridley sea turtle",
-    species_id == 26 ~ "loggerhead sea turtle",
-    species_id == 27 ~ "unidentified sea turtle"
+    species_id == 1 ~ "Killer whale",
+    species_id == 2 ~ "Humpback whale",
+    species_id == 3 ~ "Grey whale",
+    species_id == 4 ~ "Minke whale",
+    species_id == 5 ~ "Fin whale",
+    species_id == 6 ~ "Sperm whale",
+    species_id == 7 ~ "Blue whale",
+    species_id == 8 ~ "Sei whale", #"Rare whale species"
+    species_id == 9 ~ "North Pacific Right whale", #"Rare whale species"
+    species_id == 10 ~ "Bairds Beaked whale", #"Rare whale species"
+    species_id == 11 ~ "Cuviers Beaked whale", #"Rare whale species"
+    species_id == 12 ~ "Other Rare whale", #"Rare whale species"
+    species_id == 13 ~ "Unidentified whale",
+    species_id == 14 ~ "Killer whale",
+    species_id == 15 ~ "Harbour porpoise", #"Porpoise/dolphin species"
+    species_id == 16 ~ "Dalls porpoise", #"Porpoise/dolphin species"
+    species_id == 17 ~ "Pacific White-sided dolphin", #"Porpoise/dolphin species"
+    species_id == 18 ~ "Rissos dolphin", #"Porpoise/dolphin species"
+    species_id == 19 ~ "Northern Right Whale dolphin", #"Porpoise/dolphin species"
+    species_id == 20 ~ "False Killer whale", #"Porpoise/dolphin species"
+    species_id == 21 ~ "Common dolphin", #"Porpoise/dolphin species"
+    species_id == 22 ~ "Unidentified dolphin / porpoise", 
+    species_id == 23 ~ "Leatherback sea turtle", # "Turtle"
+    species_id == 24 ~ "Green sea turtle", # "Turtle"
+    species_id == 25 ~ "Olive ridley sea turtle", # "Turtle"
+    species_id == 26 ~ "Loggerhead sea turtle", # "Turtle"
+    species_id == 27 ~ "unidentified sea turtle" # "Turtle"
   )) %>% 
   dplyr::group_by(year = lubridate::year(sighted_at), month = lubridate::month(sighted_at), species_id) %>% 
   dplyr::filter(dplyr::between(sighted_at, start_date, end_date)) %>% 
@@ -1247,6 +1247,64 @@ joined_tables %>%
   dplyr::summarise(count = dplyr::n())
 
 
+## Bar chart of detections
+sightings_clean %>% 
+  dplyr::mutate(species = stringr::str_replace(species, "Whale", "whale")) %>% 
+  dplyr::mutate(species = dplyr::case_when(
+    species == "Sei whale" ~ "Rare whale species",
+    species == "Blue whale" ~ "Rare whale species",
+    species == "Sperm whale" ~ "Rare whale species",
+    species == "North Pacific right whale" ~ "Rare whale species",
+    species == "Bairds Beaked whale" ~ "Rare whale species",
+    species == "Cuviers Beaked whale" ~ "Rare whale species",
+    species == "Other rare species" ~ "Rare whale species",
+    stringr::str_detect(species,"porpoise") == T ~ "Porpoise/dolphin species",
+    stringr::str_detect(species,"dolphin") == T ~ "Porpoise/dolphin species",
+    stringr::str_detect(species,"turtle") == T ~ "Turtle species",
+    species == "False killer whale" ~ "Porpoise/dolphin species",
+    TRUE ~ species
+  )) %>% 
+  dplyr::select(species) %>% 
+  dplyr::group_by(species) %>% 
+  dplyr::summarise(detections = dplyr::n()) %>% 
+  dplyr::arrange(desc(detections)) %>% 
+  dplyr::mutate(species = factor(species, levels = species[order(detections)])) %>% 
+  plotly::plot_ly(x = ~detections,
+                  y = ~species,
+                  color = ~species,
+                  type = "bar") %>% 
+  plotly::layout(legend = list(
+    show = F
+  ), 
+    xaxis = list(title = "",
+                              showline = TRUE,
+                              showgrid = FALSE,
+                              showticklabels = TRUE,
+                              linecolor = 'rgb(204, 204, 204)',
+                              linewidth = 2,
+                              ticks = 'outside',
+                              tickcolor = 'rgb(204, 204, 204)',
+                              tickwidth = 2,
+                              ticklength = 5,
+                              # tickformat="%b %Y",
+                              # ticktext = format("%b %Y"),
+                              # dtick = "M1",
+                              tickfont = list(family = 'Arial',
+                                              size = 16,
+                                              color = 'rgb(82, 82, 82)')),
+                 yaxis = list(title = "",
+                              showgrid = T,
+                              zeroline = FALSE,
+                              showline = FALSE,
+                              tickfont = list(family = 'Arial',
+                                              size = 16,
+                                              color = 'rgb(82, 82, 82)')),
+                 tickfont = list(family = 'Arial',
+                                 size = 18,
+                                 color = 'rgb(82, 82, 82)'))
+
+
+  
 
 
 

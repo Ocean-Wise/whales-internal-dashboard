@@ -1,4 +1,4 @@
-#####~~~~~~~~~~~~~~~~~~~~ Quiet Sound Reporting ~~~~~~~~~~~~~~~~~~~~~~~~######
+###~~~ Quiet Sound Reporting ~~~######
 ## Author: Alex Mitchell
 ## Purpose: To produce monthly reports for Quiet Sound
 ## Date written: 2023-12-05
@@ -9,14 +9,22 @@
 ##        § Number of alerts
 
 
-#####~~~~~~~~~~~~~~~~~~~~ Data import and basic cleaning ~~~~~~~~~~~~~~~~~~~~~~~~######
+###~~~ Data import and basic cleaning ~~~######
 
-# source("./monthly-dashboard-numbers.R")
+start_date = as.Date("2024-01-01")
+end_date = as.Date("2025-09-30")
 
-
-#####~~~~~~~~~~~~~~~~~~~~ Data manipulation ~~~~~~~~~~~~~~~~~~~~~~~~######
-
-### Create US based sightings
+ocean_wise_palette = c(
+  "Sun"      = "#FFCE34",
+  "Kelp"     = "#A2B427",
+  "Coral"    = "#A8007E",
+  "Anemone"  = "#354EB1",
+  "Ocean"    = "#005A7C",
+  "Tide"     = "#5FCBDA",
+  "Black"    = "#000000",
+  "White"    = "#FFFFFF",
+  "Dolphin"  = "#B1B1B1"
+)
 
 ## Import US economic exclusive zone.
 US_EZZ = sf::read_sf(dsn = paste0("C:/Users/",
@@ -25,29 +33,29 @@ US_EZZ = sf::read_sf(dsn = paste0("C:/Users/",
                      layer = "eez_v11") %>% 
   dplyr::filter(SOVEREIGN1 == "United States", MRGID == 8456)
 
+##~~~ Data manipulation ~~~######
 
 ## US Sightings total
-joined_tables %>% 
-  sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
-  sf::st_make_valid() %>% 
-  sf::st_join(x = ., 
-              y = US_EZZ,
-              join = sf::st_within) %>% 
-  dplyr::filter(GEONAME == "United States Exclusive Economic Zone") %>%
-  # dplyr::filter(lubridate::month(sighted_at) == 4 & lubridate::year(sighted_at) == 2024) %>%
-  sf::st_drop_geometry() %>% 
-  dplyr::select(sighting_id,sent_at) %>% 
-  dplyr::distinct() %>% 
-  dplyr::group_by(year_mon = zoo::as.yearmon(sent_at)) %>% 
-  dplyr::summarise(count = dplyr::n()) %>% 
-  dplyr::filter(
-    ., dplyr::between(year_mon, 
-                      zoo::as.yearmon("Jan 2024"), 
-                      zoo::as.yearmon("Sep 2025"))
-  )
+# alerts_detections %>% 
+#   sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
+#   sf::st_make_valid() %>% 
+#   sf::st_join(x = ., 
+#               y = US_EZZ,
+#               join = sf::st_within) %>% 
+#   dplyr::filter(GEONAME == "United States Exclusive Economic Zone") %>%
+#   sf::st_drop_geometry() %>% 
+#   dplyr::select(sighting_id,sent_at) %>% 
+#   dplyr::distinct() %>% 
+#   dplyr::group_by(year_mon = zoo::as.yearmon(sent_at)) %>% 
+#   dplyr::summarise(count = dplyr::n()) %>% 
+#   dplyr::filter(
+#     ., dplyr::between(year_mon, 
+#                       zoo::as.yearmon("Jan 2024"), 
+#                       zoo::as.yearmon("Sep 2025"))
+#   )
 
-
-sighting_alert_us = joined_tables %>% 
+##
+alert_us = alerts_detections %>% 
   dplyr::filter(is.na(longitude) == F) %>% 
   sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
   sf::st_make_valid() %>% 
@@ -56,16 +64,38 @@ sighting_alert_us = joined_tables %>%
               join = sf::st_within) %>% 
   dplyr::filter(GEONAME == "United States Exclusive Economic Zone" & is.na(code) == F)
 
+detections_us = detections_pre %>% 
+  dplyr::filter(is.na(longitude) == F) %>% 
+  sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
+  sf::st_make_valid() %>% 
+  sf::st_join(x = ., 
+              y = US_EZZ,
+              join = sf::st_within) %>% 
+  dplyr::filter(GEONAME == "United States Exclusive Economic Zone")
+
+## Total year monthly detections
+
+detections_us %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(id,sighted_at) %>%
+  dplyr::distinct() %>%
+  dplyr::group_by(year_mon = zoo::as.yearmon(sighted_at)) %>%
+  dplyr::summarise(count = dplyr::n()) %>%
+  dplyr::filter(dplyr::between(year_mon,
+                               zoo::as.yearmon(start_date),
+                               zoo::as.yearmon(end_date)))
+  
+
 ### Year on year change in alerts and sightings
 # 
-# n_sightings = sighting_alert_us %>% 
+# n_sightings = alert_us %>% 
 #   sf::st_drop_geometry() %>% 
 #   # dplyr::group_by(year = lubridate::year(sent_at)) %>% 
 #   dplyr::group_by(year_mon = zoo::as.yearmon(sent_at)) %>%
 #   dplyr::summarize(count_sightings = dplyr::n_distinct(sighting_id)) 
 # 
 # 
-# n_alerts = sighting_alert_us %>% 
+# n_alerts = alert_us %>% 
 #   sf::st_drop_geometry() %>% 
 #   # dplyr::group_by(year = lubridate::year(sent_at)) %>%
 #   dplyr::group_by(year_mon = zoo::as.yearmon(sent_at)) %>%
@@ -78,7 +108,7 @@ sighting_alert_us = joined_tables %>%
 
 ### Continuous change in alerts and sightings
 
-# high_alerts_list = sighting_alert_us %>% 
+# high_alerts_list = alert_us %>% 
 #   # dplyr::filter(sent_at > as.Date("2024-07-31") & sent_at < as.Date("2025-01-01")) %>% 
 #   dplyr::group_by(tracking_id) %>% 
 #   sf::st_drop_geometry() %>% 
@@ -88,27 +118,23 @@ sighting_alert_us = joined_tables %>%
 
 
 
-cont_data = joined_tables %>%
-  dplyr::filter(dplyr::case_when(zoo::as.yearmon(sent_at) == zoo::as.yearmon(Sys.Date()) ~ F,
-                                 zoo::as.yearmon(sent_at) != zoo::as.yearmon(Sys.Date()) ~ T)) 
-
-monthly_sightings = cont_data %>% 
+monthly_detections = detections_us %>% 
   sf::st_drop_geometry() %>% 
-  dplyr::group_by(year_month = zoo::as.yearmon(sent_at)) %>% 
-  dplyr::summarize(count_detections = dplyr::n_distinct(sighting_id)) 
+  dplyr::group_by(year_month = zoo::as.yearmon(sighted_at)) %>% 
+  dplyr::summarize(count_detections = dplyr::n()) %>% 
+  dplyr::filter(year_month < zoo::as.yearmon(Sys.Date()))
 
-monthly_alerts = cont_data %>% 
-  sf::st_drop_geometry() %>% 
-  # dplyr::filter(!tracking_id %in% high_alerts_list$tracking_id) %>% 
+monthly_alerts = alert_us %>% 
+  sf::st_drop_geometry() %>%
   dplyr::group_by(year_month = zoo::as.yearmon(sent_at)) %>% 
   dplyr::summarize(count_alerts = dplyr::n()) 
 
-cont_counts = dplyr::left_join(monthly_sightings, monthly_alerts) %>% 
+cont_counts = dplyr::left_join(monthly_detections, monthly_alerts) %>% 
   dplyr::mutate(year_month = zoo::as.Date(year_month)) %>% 
-  dplyr::filter(year_month > "2022-12-01")
+  dplyr::filter(year_month < end_date)
 
 
-## Data Viz 
+##~~~ Data Viz ~~~####
 
 vline <- list(type = "line",
               y0 = 0,
@@ -140,6 +166,16 @@ vline3 <- list(type = "line",
               line = list(color = "B1B1B1", dash="dot")
 )
 
+# vline4 <- list(type = "line",
+#                y0 = 0,
+#                y1 = 1,
+#                yref = "paper",
+#                x0 = "2024-03-01",
+#                x1 = "2024-03-01",
+#                line = list(color = "B1B1B1", dash="dot")
+# )
+
+
 highlight_rect <- list(
   type = "rect",
   x0 = "2024-10-01",
@@ -165,7 +201,12 @@ plotly::plot_ly(data = cont_counts,
                     type = "scatter",
                     mode = "lines",
                     line = list(color = "005580")) %>% 
-  plotly::layout(shapes = list(vline, vline2, vline3, highlight_rect),
+  plotly::layout(shapes = list(vline, 
+                               vline2, 
+                               vline3, 
+                               # vline4
+                               highlight_rect
+                               ),
                  xaxis = list(title = "",
                               showline = TRUE,
                               showgrid = FALSE,
@@ -177,7 +218,7 @@ plotly::plot_ly(data = cont_counts,
                               tickwidth = 2,
                               ticklength = 5,
                               ticktext = format("%b %Y"),
-                              dtick = "M6",
+                              # dtick = "M6",
                               # tickvals = c(as.character(cont_counts$year_month)[seq(1, length(cont_counts$year_month), by = 2)]),
                               tickfont = list(family = 'Arial',
                                               size = 16,
@@ -193,11 +234,15 @@ plotly::plot_ly(data = cont_counts,
                    x = "2023-08-01", y = 2000,
                    text = "Acartia \nintegrated") %>%  
   plotly::add_text(showlegend = FALSE,
-                   x = "2024-03-01", y = 2100,
+                   x = "2024-06-01", y = 4000,
                    text = "Orca Network \nsummer contract\n expired") %>% 
+  # plotly::add_text(showlegend = FALSE,
+  #                  x = "2024-02-01", y = 5000,
+  #                  text = "Cetacean Desk \noperational") %>% 
   plotly::add_text(showlegend = FALSE,
-                   x = "2024-07-01", y = 1900,
+                   x = "2024-10-01", y = 2400,
                    text = "Orca Network \n contract renewed")
+  
 
 
 
@@ -208,7 +253,7 @@ plotly::plot_ly(data = cont_counts,
 #                  margin = cumulative_margin,
 #                  showlegend = F)
 
-us_map = sighting_alert_us %>% 
+us_map = alert_us %>% 
   dplyr::filter(lubridate::year(sighted_at) == 2025 | lubridate::year(sighted_at) == 2025) %>%
   dplyr::mutate(species = 
                   dplyr::case_when(
@@ -235,8 +280,8 @@ us_map = sighting_alert_us %>%
   
 us_map %>% 
   leaflet::leaflet() %>%
-    leaflet::addTiles() %>%
-    leaflet::addCircleMarkers(
+  leaflet::addProviderTiles(leaflet::providers$CartoDB.Positron) %>% 
+  leaflet::addCircleMarkers(
       radius = 2,
       group = ~species,
       color = ~col_palette,
@@ -282,21 +327,31 @@ us_map %>%
 
 
 #### line graph alert source ####
-detections_source = joined_tables %>% 
-  sf::st_drop_geometry() %>% 
+detections_source = detections_us %>% 
+  sf::st_drop_geometry() %>%
   dplyr::select(c(species, source_entity, sighted_at)) %>% 
   dplyr::distinct() %>% 
-  dplyr::filter(sighted_at > as.Date("2024-01-01") &  zoo::as.yearmon(sighted_at) < zoo::as.yearmon(Sys.Date())) %>% 
+  dplyr::filter(dplyr::between(zoo::as.yearmon(sighted_at),
+                               zoo::as.yearmon(start_date),
+                               zoo::as.yearmon(lubridate::rollback(lubridate::floor_date(Sys.Date(), 
+                                                                                         unit = "month"))))
+                ) %>% 
   dplyr::group_by(source_entity, yearmon = zoo::as.yearmon(sighted_at)) %>% 
-  dplyr::summarise(detections = dplyr::n())
+  dplyr::summarise(detections = dplyr::n()) %>% 
+  dplyr::arrange(yearmon)
 
-alerts_source = joined_tables %>% 
+alerts_source = alert_us %>% 
   sf::st_drop_geometry() %>% 
   dplyr::select(c(species, source_entity, sent_at)) %>% 
   dplyr::distinct() %>% 
-  dplyr::filter(sent_at > as.Date("2024-01-01") &  zoo::as.yearmon(sent_at) < zoo::as.yearmon(Sys.Date())) %>% 
+  dplyr::filter(dplyr::between(zoo::as.yearmon(sent_at),
+                               zoo::as.yearmon(start_date),
+                               zoo::as.yearmon(lubridate::rollback(lubridate::floor_date(Sys.Date(), 
+                                                                                         unit = "month"))))
+  ) %>% 
   dplyr::group_by(source_entity, yearmon = zoo::as.yearmon(sent_at)) %>% 
-  dplyr::summarise(alerts = dplyr::n())
+  dplyr::summarise(alerts = dplyr::n()) %>% 
+  dplyr::arrange(yearmon)
 
 source_colors = c(
   "Ocean Wise" = "#1f77a4",   # blue
@@ -321,7 +376,7 @@ plotly::plot_ly() %>%
     data = source_details,
     x = ~month,
     y = ~detections,
-    type = "line",
+    mode = "line",
     split = ~line_group,
     opacity = ~opacity
     # text = ~paste(source_entity, "<br>Year:", year, "<br>Month:", month, "<br>Detections:", detections),
@@ -360,6 +415,64 @@ plotly::plot_ly() %>%
     yaxis = list(title = "Detections"),
     legend = list(title = list(text = "<b>Source</b>"))
   )
+
+
+
+
+## Detection bar graph
+plot_data = detections_us %>%
+  sf::st_drop_geometry() %>%
+  dplyr::mutate(year_month = lubridate::floor_date(sighted_at, unit = "month")) %>%
+  dplyr::filter(year_month > as.Date("2022-12-31") & year_month < as.Date("2025-01-01")) %>% 
+  dplyr::filter(!is.na(source_entity)) %>%
+  dplyr::group_by(year_month, source_entity) %>%
+  dplyr::summarise(count = dplyr::n(), .groups = "drop")
+  
+# Match source_entity to colors (recycling if needed)
+color_map = rep(ocean_wise_palette, length.out = dplyr::n_distinct(plot_data$source_entity))
+names(color_map) = unique(plot_data$source_entity)  
+
+plotly::plot_ly(
+  plot_data,
+    x = ~year_month,
+    y = ~count,
+    color = ~source_entity,
+    colors = color_map,
+    type = 'bar'
+  ) %>%
+  plotly::layout(
+    barmode = 'stack',
+    xaxis = list(title = ''),
+    yaxis = list(title = 'Detections'),
+    title = '',
+    xaxis = list(title = "",
+                 showline = TRUE,
+                 showgrid = FALSE,
+                 showticklabels = TRUE,
+                 linecolor = 'rgb(204, 204, 204)',
+                 linewidth = 2,
+                 ticks = 'outside',
+                 tickcolor = 'rgb(204, 204, 204)',
+                 tickwidth = 2,
+                 ticklength = 5,
+                 ticktext = format("%b %Y"),
+                 # dtick = "M6",
+                 # tickvals = c(as.character(cont_counts$year_month)[seq(1, length(cont_counts$year_month), by = 2)]),
+                 tickfont = list(family = 'Arial',
+                                 size = 16,
+                                 color = 'rgb(82, 82, 82)')),
+    yaxis = list(title = "",
+                 showgrid = T,
+                 zeroline = FALSE,
+                 showline = FALSE,
+                 tickfont = list(family = 'Arial',
+                                 size = 16,
+                                 color = 'rgb(82, 82, 82)')))
+  
+
+
+
+
 
 
 ## Alerts
@@ -460,7 +573,7 @@ users_cumulative %>%
 
 ## Who is recieving alerts? ####
 
-high_alerts_list = sighting_alert_us %>% 
+high_alerts_list = alert_us %>% 
   dplyr::filter(sent_at > as.Date("2025-01-01") & zoo::as.yearmon(sent_at) < zoo::as.yearmon(Sys.Date())) %>%
   dplyr::group_by(tracking_id) %>% 
   sf::st_drop_geometry() %>% 
@@ -469,3 +582,147 @@ high_alerts_list = sighting_alert_us %>%
   dplyr::filter(is.na(auth_id) == F)
 
 
+##~~~~~~~~~~~~~~~~~~~~~ Sandbox ~~~~~~~~~~~~~~~~~~~~~##
+
+
+## US Coast Guard Numbers
+
+# detections_pre %>% 
+#   dplyr::filter(is.na(longitude) == F) %>% 
+#   # sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
+#   # sf::st_make_valid() %>% 
+#   # sf::st_join(x = ., 
+#   #             y = US_EZZ,
+#   #             join = sf::st_within) %>% 
+#   # dplyr::filter(GEONAME == "United States Exclusive Economic Zone") %>% 
+#   # sf::st_drop_geometry() %>% 
+#   dplyr::filter(stringr::str_detect(email, "(?i)uscg.mil\\b")) %>%  
+#   # dplyr::filter(lubridate::year(sighted_at) == 2024) %>%
+#   dplyr::mutate(
+#     Month = lubridate::month(sighted_at, label = TRUE, abbr = TRUE),
+#     Source = dplyr::if_else(
+#       tolower(email) == "whales@uscg.mil", 
+#       "Cetacean Desk", 
+#       "Coast Guard Resources"
+#     )
+#   ) %>%
+#   dplyr::count(Source, Month, name = "Sightings") %>%
+#   tidyr::pivot_wider(
+#     names_from = Month,
+#     values_from = Sightings,
+#     values_fill = 0
+#   ) %>%
+#   gt::gt() %>%
+#   gt::tab_header(
+#     title = "USCG Sightings by Source and Month (2024)"
+#   ) %>%
+#   gt::cols_label(
+#     Source = "Source"
+#   )
+#   
+# x = detections_pre %>% 
+#   dplyr::filter(is.na(longitude) == F) %>% 
+#   sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
+#   sf::st_make_valid() %>% 
+#   sf::st_join(x = ., 
+#               y = US_EZZ,
+#               join = sf::st_within) %>% 
+#   dplyr::filter(GEONAME == "United States Exclusive Economic Zone") %>% 
+#   sf::st_drop_geometry() %>% 
+#   dplyr::filter(stringr::str_detect(email, "(?i)uscg.mil\\b")) %>%  
+#   dplyr::filter(lubridate::year(sighted_at) == 2024) %>%
+#   dplyr::mutate(
+#     Month = lubridate::month(sighted_at, label = TRUE, abbr = TRUE),
+#     Source = dplyr::if_else(
+#       tolower(email) == "whales@uscg.mil", 
+#       "Cetacean Desk", 
+#       "Coast Guard Resources"
+#     )
+#   ) %>% 
+#   dplyr::select(sighted_at, id, Source, species, number_of_animals) %>% 
+#   dplyr::left_join(alert_clean, by = dplyr::join_by(id == sighting_id)) %>% 
+#   dplyr::mutate(
+#     alert_sent = dplyr::case_when(
+#       is.na(sent_at) == T ~ "no",
+#       TRUE ~ "yes"
+#     )
+#   )%>%
+#   dplyr::mutate(
+#     year_month = lubridate::floor_date(as.POSIXct(sighted_at), unit = "month")
+#   ) %>%
+#   dplyr::group_by(year_month, Source, alert_sent) %>%
+#   dplyr::summarise(count = dplyr::n(), .groups = "drop") %>%
+#   tidyr::pivot_wider(
+#     names_from = alert_sent,
+#     values_from = count,
+#     values_fill = 0,
+#     names_prefix = "alert_"
+#   )
+# 
+# 
+# x = detections_pre %>% 
+#   dplyr::filter(is.na(longitude) == F) %>% 
+#   sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
+#   sf::st_make_valid() %>% 
+#   sf::st_join(x = ., 
+#               y = US_EZZ,
+#               join = sf::st_within) %>% 
+#   dplyr::filter(GEONAME == "United States Exclusive Economic Zone") %>% 
+#   sf::st_drop_geometry() %>% 
+#   dplyr::filter(stringr::str_detect(email, "(?i)uscg.mil\\b")) %>%  
+#   dplyr::filter(lubridate::year(sighted_at) == 2024) %>%
+#   dplyr::mutate(
+#     Month = lubridate::month(sighted_at, label = TRUE, abbr = TRUE),
+#     Source = dplyr::if_else(
+#       tolower(email) == "whales@uscg.mil", 
+#       "Cetacean Desk", 
+#       "Coast Guard Resources"
+#     )
+#   ) %>% 
+#   dplyr::select(sighted_at, id, Source, species, number_of_animals) %>% 
+#   dplyr::left_join(alert_clean, by = dplyr::join_by(id == sighting_id)) %>% 
+#   dplyr::mutate(
+#     alert_sent = dplyr::case_when(
+#       is.na(sent_at) == T ~ "no",
+#       TRUE ~ "yes"
+#     )
+#   )%>%
+#   dplyr::mutate(
+#     year_month = lubridate::floor_date(as.POSIXct(sighted_at), unit = "month")
+#   ) %>%
+#   dplyr::filter(alert_sent == "yes")
+# 
+# x %>% 
+#   dplyr::mutate(number_of_animals = dplyr::case_when(
+#     grepl("~", number_of_animals) ~ as.numeric(sub(".*~([0-9]+)$", "\\1", number_of_animals)),
+#     TRUE ~ as.numeric(number_of_animals)
+#   )) %>% 
+#   dplyr::group_by(species) %>%
+#   dplyr::select(species, number_of_animals) %>% 
+#   dplyr::summarise(count = sum(number_of_animals), .groups = "drop") %>%
+#   tidyr::pivot_wider(
+#     names_from = alert_sent,
+#     values_from = count,
+#     values_fill = 0,
+#     names_prefix = "alert_"
+#   )
+# 
+# 
+# detections_us %>% 
+#   dplyr::filter(stringr::str_detect(email, "(?i)uscg.mil\\b")) %>%  
+#   dplyr::mutate(Source = dplyr::if_else(
+#     tolower(email) == "whales@uscg.mil", 
+#     "Cetacean Desk", 
+#     "Coast Guard Resources"
+#   )) %>%
+#   dplyr::count(Source, name = "Sightings") %>%
+#   gt::gt() %>%
+#   gt::tab_header(
+#     title = "Summary of USCG Sightings by Source"
+#   ) %>%
+#   gt::cols_label(
+#     Source = "Source",
+#     Sightings = "Number of Sightings"
+#   )
+# 
+# summary_table

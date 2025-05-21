@@ -24,29 +24,15 @@ user = "AlexMitchell"
 ## Runs the data-processing.R file from the R Project - this saves you from opening the other file and means we set the user here. 
 source(file = "./data-processing.R")
 
-## create a filter to remove "test" data
-source_filter = c("Ocean Wise", "Orca Network", "WhaleSpotter", "JASCO", "SMRU", "Whale Alert")
-
+## Join alerts and detections into one DF so we can see what detections > alerts 
 alerts_detections = alert_clean %>% 
   dplyr::left_join(detections_clean, 
                    dplyr::join_by(sighting_id == id)
   ) %>%
-  janitor::clean_names() %>%
-  dplyr::mutate(source_entity =
-                  dplyr::case_when(
-                    is.na(source_entity) == T ~ "Ocean Wise",
-                    stringr::str_detect(source_entity, "Ocean Wise") == T ~ "Ocean Wise",
-                    stringr::str_detect(source_entity, "Acartia") == T ~ "Orca Network",
-                    stringr::str_detect(source_entity, "Orca Network") == T ~ "Orca Network",
-                    stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
-                    stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
-                    stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
-                    stringr::str_detect(source_entity, "Whale Alert") == T ~ "Whale Alert",
-                    TRUE ~ source_entity)) %>% 
-  dplyr::distinct() %>% 
-  dplyr::filter(source_entity %in% source_filter)
+  dplyr::distinct() # I put this just incase there are repeated rows. It's a failsafe.
 
 ## Create a filter to remove users who may be inflating the alert numbers - SIMRES / SMRU testers etc
+## as these numbers vastly increase the alerts number leading to inflated reporting
 ## Filter
 ignore_ids = 
   c(
@@ -62,18 +48,23 @@ ignore_ids =
 ## EXTRA STEP AS LAPIS MESSED UP THE DB. - this will take information from sightings spreadsheet and populate missing sightings data for alerts
 interim_sightings = sightings_clean %>% 
   dplyr::mutate(
-    lat_new = latitude,
-    lon_new = longitude
+    lat_new = latitude, # create this to compare latitude in the sightings spreadsheet with database detections
+    lon_new = longitude # "_new" extension avoides errors when joining datasets together.  
   ) %>% 
   dplyr::select(c(id, species, lat_new, lon_new))
 
+## Create a dataframe with data which is NA in the latitude
 interim_1 = alerts_detections %>% 
   dplyr::filter(is.na(latitude)) %>% 
   dplyr::select(-species)
 
+## Create dataframe where data is complete
 interim_2 = alerts_detections %>% 
   dplyr::filter(!is.na(latitude))
 
+## Join the data from the sightings spreadsheet with data in the detections database
+## which is NA (due to Lapis error). Our email inbox still received the data, but the database\
+## deleted it. This repopulates missing data for the period where there is errors. 
 interim_1 = interim_1 %>% dplyr::left_join(
   interim_sightings,
   by = dplyr::join_by(sighting_id == id)) %>% 
@@ -85,16 +76,13 @@ interim_1 = interim_1 %>% dplyr::left_join(
   dplyr::filter(!is.na(latitude))
 ## Missing 91 lat lons from 2024 data, 1 from 2023, and 556 from 2019-2021
 
-joined_tables = dplyr::bind_rows(interim_1, interim_2) %>%
+## Final dataframe reprogrammed with cleaned data. 
+alerts_detections = dplyr::bind_rows(interim_1, interim_2) %>%
   dplyr::filter(!auth_id %in% ignore_ids)
 
-rm(alerts_detections)
 
-# still a few NAs in lat but I just will have to filter these out. 
-
-
-overall_alerts = joined_tables %>%
-  dplyr::distinct() %>%
+## Total alerts
+overall_alerts = alerts_detections %>%
   dplyr::group_by(
     year = lubridate::year(sent_at),
     month = lubridate::month(sent_at),
@@ -134,17 +122,16 @@ overall_alerts = joined_tables %>%
 # %>%
   # dplyr::filter(month < lubridate::month(Sys.Date())) ## This line removes the current months data
 ##  as reporting generally happens for the last month
+
 ## LOOK AT THIS
 overall_alerts
 
-## Total alerts in database - testers receiving many alerts
-total_alerts = nrow(joined_tables)
+## Total alerts in database MINUS testers/staff receiving many alerts
+  ## this tries to capture more "true" impact.
+total_alerts = nrow(alerts_detections)
 
 
 perc_inc = overall_alerts %>%
-  # dplyr::select(-species) %>%
-  # dplyr::group_by(year,month, Total) %>% 
-  # dplyr::
   dplyr::filter(year == 2024 | year == 2025) %>%
   dplyr::select(year, month, Total) %>%
   # dplyr::ungroup() %>% 
@@ -158,19 +145,17 @@ perc_inc
 
 #### ~~~~~~~~~~~~~~~~ How many detections has each source made? ~~~~~~~~~~~~~~~~~~~~~~~ ####
 ## Sightings numbers
-sights_pre = detections_clean %>%
-  dplyr::filter(source_entity %in% source_filter) %>% 
-  dplyr::select(-c(created_at, id, code)) %>%  # do this to remove errors caused by bugs which led to duplicates sent at same time with different
+detections_pre = detections_clean %>%
+  dplyr::select(-c(created_at, code)) %>%  # do this to remove errors caused by bugs which led to duplicates sent at same time with different
   dplyr::distinct()                             # created_at values
 
-detections = sights_pre %>%
+detections = detections_pre %>%
   dplyr::group_by(year_mon = zoo::as.yearmon(sighted_at), source_entity,) %>%
   dplyr::summarise(n = dplyr::n()) %>%
   dplyr::filter(source_entity %in% source_filter) %>% 
   tidyr::pivot_wider(names_from = source_entity,
                      values_from = n) %>%
   dplyr::mutate(dplyr::across(dplyr::everything(), ~tidyr::replace_na(.x, 0))) %>%
-  # dplyr::select(-c(`TEST - PLEASE IGNORE`, string, TEST)) %>%
   dplyr::filter(lubridate::year(year_mon) != 2019) %>%
   dplyr::group_by(year = lubridate::year(year_mon)) %>%
   dplyr::mutate(

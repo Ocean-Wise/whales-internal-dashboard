@@ -48,12 +48,12 @@ source_colors = setNames(
 ## How many sightings in reporting period Feb -...?
 
 ## Creating a simple clean detections data set for grant period
-period_detections = detections_clean %>% 
-  dplyr::filter(source_entity %in% source_filter) %>% 
+period_detections = detections_pre %>% 
+  # dplyr::filter(source_entity %in% source_filter) %>% 
   # dplyr::filter(dplyr::between(sighted_at, 
   #                              lubridate::as_date("2024-01-01"),
   #                              lubridate::rollback(lubridate::floor_date(Sys.Date(), unit = "month")))) %>% 
-  dplyr::filter(lubridate::year(sighted_at) == 2025) %>% 
+  # dplyr::filter(lubridate::year(sighted_at) == 2025) %>% 
   dplyr::select(id, sighted_at, species, source_entity, latitude, longitude)
   
 
@@ -61,9 +61,9 @@ period_detections = detections_clean %>%
 ## and the same for alerts
 period_alerts = joined_tables %>% 
   dplyr::filter(source_entity %in% source_filter) %>% 
-  dplyr::filter(dplyr::between(sent_at, 
-                               lubridate::as_date("2024-01-01"),
-                               lubridate::rollback(lubridate::floor_date(Sys.Date(), unit = "month")))) %>% 
+  # dplyr::filter(dplyr::between(sent_at, 
+  #                              lubridate::as_date("2024-01-01"),
+  #                              lubridate::rollback(lubridate::floor_date(Sys.Date(), unit = "month")))) %>% 
   dplyr::select(c(id, sighting_id, sent_at, sighted_at, species, source_entity, latitude, longitude))
 
 
@@ -85,7 +85,9 @@ jasco_events = period_detections%>%
 
 detections = period_detections %>% 
   # dplyr::filter(source_entity %in% c("JASCO", "SMRU")) %>% 
-  dplyr::group_by(source_entity, year_month = zoo::as.yearmon(sighted_at)) %>% 
+  dplyr::group_by(source_entity, 
+                  year_month = zoo::as.yearmon(sighted_at)
+                  ) %>% 
   dplyr::summarize(detections = dplyr::n_distinct(id)) %>% 
   rbind(data.frame(
     source_entity = rep("JASCO", 2),
@@ -97,7 +99,9 @@ detections = period_detections %>%
   
 alerts  = period_alerts %>% 
   # dplyr::filter(source_entity %in% c("JASCO", "SMRU")) %>% 
-  dplyr::group_by(source_entity, year_month = zoo::as.yearmon(sent_at)) %>% 
+  dplyr::group_by(source_entity, 
+                  year_month = zoo::as.yearmon(sent_at)
+                  ) %>%
   dplyr::summarize(alerts = dplyr::n()) %>% 
   rbind(data.frame(
     source_entity = rep("JASCO", 2),
@@ -117,7 +121,12 @@ make_lines_function = function(source){
                   year = lubridate::year(year_month)) %>% 
     dplyr::select(-year_month) %>% 
     tidyr::pivot_wider(names_from = year, values_from = c(detections, alerts)) %>% 
-    dplyr::filter(source_entity == source)
+    dplyr::filter(source_entity == "source") %>% 
+    # dplyr::select(c(1,2,dplyr::ends_with("24"),dplyr::ends_with("25"))) %>% 
+    dplyr::mutate(month = factor(month,
+                                 levels = month.abb,  # c("Jan", "Feb", ..., "Dec")
+                                 ordered = TRUE)) %>% 
+    dplyr::arrange(month)
   
   # make plot
   plotly::plot_ly(data = plot_data,
@@ -213,10 +222,12 @@ make_lines_function("WhaleSpotter") %>%
 
 ##~~ Day vs Night ~~####
 
-day_vs_night_function = function(year, source){
+day_vs_night_function = function(
+    # year, 
+    source){
 
     day_night_detections = period_detections %>% 
-      dplyr::filter(lubridate::year(sighted_at) == year) %>% 
+      dplyr::filter(lubridate::year(sighted_at) == year) %>%
       dplyr::filter(source_entity == source) %>% 
       dplyr::mutate(date = lubridate::as_date(sighted_at)) %>% 
       dplyr::distinct(sighted_at, date, latitude, longitude) %>%
@@ -234,13 +245,13 @@ day_vs_night_function = function(year, source){
       dplyr::select(sighted_at, latitude, longitude, dawn = sun_info_dawn, dusk = sun_info_dusk)
     
     full_months = tidyr::expand_grid(
-      month = seq.Date(from = as.Date(paste0(year,"-01-01")), to = as.Date(paste0(year,"-12-01")), by = "month"),
+      month = seq.Date(from = as.Date(paste0(2024,"-01-01")), to = as.Date(paste0(2025,"-12-01")), by = "month"),
       time_of_day = c("day", "night")
     )
     
     
     period_detections %>% 
-      dplyr::filter(lubridate::year(sighted_at) == year) %>% 
+      dplyr::filter(lubridate::year(sighted_at) == year) %>%
       dplyr::filter(source_entity == source) %>% 
       dplyr::left_join(day_night_detections, by = c("sighted_at", "latitude", "longitude")) %>% 
       dplyr::mutate(sighted_at = lubridate::force_tz(sighted_at, tzone = "America/Los_Angeles")) %>%
@@ -273,6 +284,8 @@ day_vs_night_function = function(year, source){
 }
 
 day_vs_night_function(2025, "Orca Network")
+day_vs_night_function("Whale Spotter")
+day_vs_night_function(2025, "Whale Spotter")
 
 
 
