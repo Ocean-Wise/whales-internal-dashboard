@@ -12,62 +12,77 @@
 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Import API ~~~~~~~~~~~~~~~~~~~~~~~####
 
-## API query to get sightings data from the sightings database without downloading the whole dataset...
-
-# base_url = "https://sightingsapi.ocean.org/sightings"
-# api_key = "5w6lyNFD0q6nQMyWEJxgx7FiDLfvKcrg44AdCN9U"
+# library(magrittr)
 # 
-# params = list(
-#   api_key = api_key,
-#   limit = 100,
-#   page = 1,
-#   sourceType = "observed"
-# )
+# ## API query to get sightings data from the sightings database without downloading the whole dataset...
 # 
-# # Function to query API
-# fetch_data = function(base_url, params) {
-#   response = httr::GET(
-#     url = base_url,
-#     query = params,
-#     httr::add_headers(`x-api-key` = api_key)
-#   )
-#   content = httr::content(response, as = "parsed")
-#   content$sightings
-# }
+#  base_url = "https://sightingsapi.ocean.org/sightings"
+#  api_key = "XXX"
 # 
-# # Function to flatten a single record
-# flatten_record = function(record) {
-#   record$additionalProperties = NULL
-#   purrr::list_flatten(record)
-# }
+#  params = list(
+#    api_key = api_key,
+#    limit = 100,
+#    page = 1,
+#    sourceType = "observed"
+#  )
 # 
-# # Fetch and combine all pages
-# all_data = list()
+#  # Function to query API
+#  fetch_data = function(base_url, params) {
+#    response = httr::GET(
+#      url = base_url,
+#      query = params,
+#      httr::add_headers(`x-api-key` = api_key)
+#    )
+#    content = httr::content(response, as = "parsed")
+#    content$sightings
+#  }
 # 
-# repeat {
-#   data = fetch_data(base_url, params)
-#   
-#   if (length(data) == 0) break
-#   
-#   data_df = purrr::map_dfr(data, flatten_record)
-#   all_data = dplyr::bind_rows(all_data, data_df)
-#   
-#   params$page = params$page + 1
-# }
+#  # Function to flatten a single record
+#  flatten_record = function(record) {
+#    record$additionalProperties = NULL
+#    purrr::list_flatten(record)
+#  }
 # 
-# # Clean and filter
+#  # Fetch and combine all pages
+#  all_data = list()
+# 
+#  repeat {
+#    data = fetch_data(base_url, params)
+# 
+#    if (length(data) == 0) break
+# 
+#    data_df = purrr::map_dfr(data, flatten_record)
+#    all_data = dplyr::bind_rows(all_data, data_df)
+# 
+#    params$page = params$page + 1
+#  }
+# 
+#  source_filter = c("Ocean Wise", "Orca Network", "WhaleSpotter", "JASCO", "SMRU", "Whale Alert")
+#  
+#  # Clean and filter
 # combined_data = all_data %>%
-#   dplyr::distinct() %>%
-#   janitor::clean_names() %>%
-#   dplyr::filter(source_entity == "Ocean Wise" | is.na(source_entity) == T) %>% 
-#   dplyr::filter(
-#     !stringr::str_detect(location_desc, "(?i)\\btest\\b"),
-#     !stringr::str_detect(comments, "(?i)\\btest\\b"),
-#     !stringr::str_detect(reporter_email, "(?i)\\btest\\b"),
-#     !stringr::str_detect(reporter_name, "(?i)\\btest\\b")
-#   )
-# 
-
+#  dplyr::distinct() %>%
+#  janitor::clean_names() %>%
+#  dplyr::mutate(source_entity =
+#                  dplyr::case_when(
+#                    is.na(source_entity) == T ~ "Ocean Wise",
+#                    stringr::str_detect(source_entity, "Ocean Wise") == T ~ "Ocean Wise",
+#                    stringr::str_detect(source_entity, "Acartia") == T ~ "Orca Network",
+#                    stringr::str_detect(source_entity, "Orca Network") == T ~ "Orca Network",
+#                    stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "WhaleSpotter",
+#                    stringr::str_detect(source_entity, "JASCO") == T ~ "JASCO",
+#                    stringr::str_detect(source_entity, "SMRUC") == T ~ "SMRU",
+#                    stringr::str_detect(source_entity, "Whale Alert") == T ~ "Whale Alert",
+#                    stringr::str_detect(source_entity, "SWAG") == T ~ "SWAG",
+#                    TRUE ~ "test")) %>% 
+#  dplyr::filter(source_entity != "test" & source_entity %in% source_filter) %>% 
+#  dplyr::filter(
+#    !stringr::str_detect(location_desc, "(?i)\\btest\\b"),
+#    !stringr::str_detect(comments, "(?i)\\btest\\b"),
+#    !stringr::str_detect(reporter_email, "(?i)\\btest\\b"),
+#    !stringr::str_detect(reporter_name, "(?i)\\btest\\b")
+#  )
+ 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Import - non-API~~~~~~~~~~~~~~~~~~~~~~~####
 
 ## Define a filter for the data so we can remove any org that we shouldn't have in the data
