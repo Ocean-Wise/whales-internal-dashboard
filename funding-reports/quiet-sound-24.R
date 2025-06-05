@@ -370,10 +370,9 @@ source_details = detections_source %>%
                 )
 
 
-
+source_details %>% 
 plotly::plot_ly() %>%
   plotly::add_trace(
-    data = source_details,
     x = ~month,
     y = ~detections,
     mode = "line",
@@ -403,7 +402,7 @@ plotly::plot_ly() %>%
       width = 2,
       color = source_colors[source_entity]
     ),
-    mode = "line",
+    mode = "lines",
     split = ~line_group,
     opacity = ~opacity,
     text = ~paste(source_entity, "<br>Year:", year, "<br>Month:", month, "<br>Detections:", detections),
@@ -423,7 +422,7 @@ plotly::plot_ly() %>%
 plot_data = detections_us %>%
   sf::st_drop_geometry() %>%
   dplyr::mutate(year_month = lubridate::floor_date(sighted_at, unit = "month")) %>%
-  dplyr::filter(year_month > as.Date("2022-12-31") & year_month < as.Date("2025-01-01")) %>% 
+  dplyr::filter(year_month > as.Date("2023-01-01") & year_month < as.Date("2025-05-31")) %>% 
   dplyr::filter(!is.na(source_entity)) %>%
   dplyr::group_by(year_month, source_entity) %>%
   dplyr::summarise(count = dplyr::n(), .groups = "drop")
@@ -501,6 +500,55 @@ plotly::plot_ly() %>%
     legend = list(title = list(text = "<b>Source</b>"))
   )
 
+## Alert bar graph
+plot_data = alert_us %>%
+  sf::st_drop_geometry() %>%
+  dplyr::mutate(year_month = lubridate::floor_date(sighted_at, unit = "month")) %>%
+  dplyr::filter(year_month > as.Date("2023-01-01") & year_month < as.Date("2025-05-31")) %>% 
+  dplyr::filter(!is.na(source_entity)) %>%
+  dplyr::group_by(year_month, source_entity) %>%
+  dplyr::summarise(count = dplyr::n(), .groups = "drop")
+
+# Match source_entity to colors (recycling if needed)
+color_map = rep(ocean_wise_palette, length.out = dplyr::n_distinct(plot_data$source_entity))
+names(color_map) = unique(plot_data$source_entity)  
+
+plotly::plot_ly(
+  plot_data,
+  x = ~year_month,
+  y = ~count,
+  color = ~source_entity,
+  colors = color_map,
+  type = 'bar'
+) %>%
+  plotly::layout(
+    barmode = 'stack',
+    xaxis = list(title = ''),
+    yaxis = list(title = 'Alerts'),
+    title = '',
+    xaxis = list(title = "",
+                 showline = TRUE,
+                 showgrid = FALSE,
+                 showticklabels = TRUE,
+                 linecolor = 'rgb(204, 204, 204)',
+                 linewidth = 2,
+                 ticks = 'outside',
+                 tickcolor = 'rgb(204, 204, 204)',
+                 tickwidth = 2,
+                 ticklength = 5,
+                 ticktext = format("%b %Y"),
+                 # dtick = "M6",
+                 # tickvals = c(as.character(cont_counts$year_month)[seq(1, length(cont_counts$year_month), by = 2)]),
+                 tickfont = list(family = 'Arial',
+                                 size = 16,
+                                 color = 'rgb(82, 82, 82)')),
+    yaxis = list(title = "",
+                 showgrid = T,
+                 zeroline = FALSE,
+                 showline = FALSE,
+                 tickfont = list(family = 'Arial',
+                                 size = 16,
+                                 color = 'rgb(82, 82, 82)')))
 
 
 ## User Growth ####
