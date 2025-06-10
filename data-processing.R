@@ -9,10 +9,9 @@
 ####~~~~~~~~~~~~~~~~~~~~~~Info~~~~~~~~~~~~~~~~~~~~~~~####
 ## Currently not able to automate this data process, so to download the data, ensure to change the
 
-
+library(magrittr)
 ####~~~~~~~~~~~~~~~~~~~~~~Data Import API ~~~~~~~~~~~~~~~~~~~~~~~####
 
-# library(magrittr)
 # 
 # ## API query to get sightings data from the sightings database without downloading the whole dataset...
 # 
@@ -89,7 +88,7 @@
 source_filter = c("Ocean Wise", "Orca Network", "WhaleSpotter", "JASCO", "SMRU", "Whale Alert")
 
 ## Get a list of files in the directory which we want to get the data from. It is important that older files are overwritten, not added. 
-file_list = list.files(paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - Ocean Wise Data/dashboard/"), full.names = T) %>% 
+file_list = list.files(paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/"), full.names = T) %>% 
   purrr::keep(~ stringr::str_ends(.x, ".csv")) %>% 
   .[. != paste0("C:/Users/", user, "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/dashboard/historical_data")]
   
