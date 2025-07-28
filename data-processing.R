@@ -205,10 +205,8 @@ rm(list = c("alert_historic",
             "sightings_spreadsheet",
             "user_raw"))
   
-  
-  
-  
-#   ####~~~~~~~~~~~~~~~~~~~~~~Metric Sandbox~~~~~~~~~~~~~~~~~~~~~~~####
+
+####~~~~~~~~~~~~~~~~~~~~~~Metric Sandbox~~~~~~~~~~~~~~~~~~~~~~~####
 
 
 ## sightings 2022 vs 2023

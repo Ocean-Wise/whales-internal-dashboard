@@ -189,21 +189,23 @@ plotly::plot_ly(sights_species,
 ## Calculate sunrise and sunset for each date in your dataset
 x = detections_clean %>%
   dplyr::ungroup() %>% 
-  # dplyr::filter(as.Date(sighted_at) > as.Date("2024/02/01")) %>% 
-  dplyr::filter(stringr::str_detect(source_entity, "WhaleSpotter")) %>% 
+  dplyr::filter(as.Date(sighted_at) > as.Date("2024/02/01") & as.Date(sighted_at) < as.Date("2025/06/30")) %>%
+  dplyr::filter(stringr::str_detect(source_entity, "WhaleSpotter") & stringr::str_detect(org_name, "Quiet Sound")) %>% 
   dplyr::mutate(
     sun_times = suncalc::getSunlightTimes(as.Date(sighted_at),
                                           lat = 48.51566, 
-                                          lon = -123.1528))
-
-x %>% 
+                                          lon = -123.1528)) %>% 
   dplyr::mutate(sunrise = lubridate::ymd_hms(x$sun_times$sunrise, tz = "UTC") - lubridate::hours(7),
                 sunset = lubridate::ymd_hms(x$sun_times$sunset, tz = "UTC") - lubridate::hours(7)) %>% 
   dplyr::select(id, sighted_at, latitude, longitude, 
                 species, source_entity, sunrise, sunset) %>% 
   dplyr::mutate(day_night = 
                   dplyr::case_when(dplyr::between(sighted_at, sunrise, sunset)  ~ "day",
-                                   TRUE  ~ "night")) %>% 
+                                   TRUE  ~ "night"))
+
+openxlsx::write.xlsx(x,paste0("C:/Users/", user, "/Downloads/whalespotter-quietsound", Sys.Date(),".xlsx"))
+
+x  %>% 
   dplyr::group_by(month = lubridate::month(sighted_at),day_night) %>% 
   dplyr::summarise(count = dplyr::n()) %>% 
   tidyr::pivot_wider(
@@ -556,18 +558,19 @@ users_overall = readxl::read_xlsx(
   "C:/Users/AlexMitchell/Ocean Wise Conservation Association/Whales Initiative - General/BCCSN.Groups/Whale Report Alert System/Participants/WRASUSERS_main.xlsx",
   sheet = "Authorized"
 ) %>% 
-  janitor::clean_names() %>% 
+  janitor::clean_names()
   dplyr::mutate(approval_date = janitor::excel_numeric_to_date(as.numeric(approval_date)))
   
 users_cumulative = users_overall %>% 
-  dplyr::filter(region_clean == "USA") %>%
+  # dplyr::filter(region_clean == "USA") %>%
   dplyr::group_by(year_qtr = zoo::as.yearqtr(approval_date), org_type) %>%
   dplyr::summarise(count = dplyr::n()) %>% 
   dplyr::group_by(org_type) %>% 
   dplyr::mutate(cum_count = cumsum(count)) %>% 
   dplyr::select(-count) %>% 
   tidyr::pivot_wider(names_from = org_type,
-                     values_from = cum_count) 
+                     values_from = cum_count) %>% 
+  dplyr::filter(!is.na(year_qtr))
 
 dates = seq(from = floor(min(users_cumulative$year_qtr)),
             to = max(users_cumulative$year_qtr),
@@ -578,7 +581,7 @@ users_cumulative = dates %>%
   dplyr::left_join(users_cumulative, by = dplyr::join_by(value == year_qtr)) %>% 
   tidyr::fill(`Marine Pilots`, Ferries, 
               Enforcement, Government, 
-              Industry, Guardians, Developer,
+              Industry, Indigenous,
               `Port Authorities`, Research,
               `Tug and Tow`, .direction = "down") %>% 
   dplyr::rename(year_qtr = value) %>% 
@@ -594,44 +597,6 @@ users_cumulative_total =
 
 ### PLOT ###
 
-### Total
-plotly::plot_ly(users_cumulative_total, 
-                x = ~year_qtr, 
-                y = ~total, 
-                type = 'scatter', 
-                mode = 'lines') %>%
-  plotly::layout(xaxis = list(title = "",
-                              showline = TRUE,
-                              showgrid = FALSE,
-                              showticklabels = TRUE,
-                              linecolor = 'rgb(204, 204, 204)',
-                              linewidth = 2,
-                              ticks = 'outside',
-                              tickcolor = 'rgb(204, 204, 204)',
-                              tickwidth = 2,
-                              ticklength = 5,
-                              # # tickformat="%b %Y",
-                              # ticktext = format("%b %Y"),
-                              # dtick = "M1",
-                              tickfont = list(family = 'Arial',
-                                              size = 16,
-                                              color = 'rgb(82, 82, 82)')),
-                 yaxis = list(title = "",
-                              showgrid = T,
-                              zeroline = FALSE,
-                              showline = FALSE,
-                              tickfont = list(family = 'Arial',
-                                              size = 16,
-                                              color = 'rgb(82, 82, 82)')),
-                 legend = list(
-                   orientation = "h",        # horizontal legend
-                   xanchor = "center",       # anchor legend at the center
-                   tickfont = list(family = 'Arial',
-                                   size = 16,
-                                   color = 'rgb(82, 82, 82)'),
-                   x = 0.5,                  # set position to the center (horizontally)
-                   y = -0.2                  # move legend below the plot
-                 ))
 
 
 ### Total by orgs
@@ -642,7 +607,7 @@ plotly::plot_ly(users_cumulative, x = ~year_qtr) %>%
   plotly::add_trace(y = ~Ferries, name = "Ferries", type = 'scatter', mode = 'lines') %>%
   plotly::add_trace(y = ~Enforcement, name = "Enforcement", type = 'scatter', mode = 'lines') %>%
   plotly::add_trace(y = ~Government, name = "Government", type = 'scatter', mode = 'lines') %>%
-  plotly::add_trace(y = ~Guardians, name = "Guardians", type = 'scatter', mode = 'lines') %>%
+  plotly::add_trace(y = ~Indigenous, name = "Indigenous", type = 'scatter', mode = 'lines') %>%
   plotly::add_trace(y = ~Industry, name = "Industry", type = 'scatter', mode = 'lines') %>%
   plotly::add_trace(y = ~`Port Authorities`, name = "Port Authorities", type = 'scatter', mode = 'lines') %>%
   plotly::add_trace(y = ~Research, name = "Research", type = 'scatter', mode = 'lines') %>%
@@ -727,15 +692,19 @@ users_cumulative %>%
 
  ## Sightings
 sight_map = sightings_clean %>%
- dplyr::filter(lubridate::year(date_time) == 2024) %>%  
+  dplyr::mutate(species = 
+                  stringr::str_to_sentence(species)) %>% 
+ # dplyr::filter(lubridate::year(date_time) == 2024) %>%  
                # & dplyr::between(lubridate::month(date), 1,10 )) %>%
  dplyr::mutate(species = 
                  dplyr::case_when(
                    stringr::str_detect(species, "dolphin") ~ "Dolphin/Porpoise species",
                    stringr::str_detect(species, "porpoise") ~ "Dolphin/Porpoise species",
-                   stringr::str_detect(species, "turtle") ~ "Potential Turtle species",
+                   stringr::str_detect(species, "turtle") ~ "Potential turtle species",
                    stringr::str_detect(species, "False") ~ "Dolphin/Porpoise species",
                    stringr::str_detect(species, "Sei") ~ "Unidentified whale",
+                   stringr::str_detect(species, "North pacific right whale") ~ "Other rare species",
+                   stringr::str_detect(species, "Blue") ~ "Other rare species",
                    .default = as.character(species)
                  )) %>% 
  dplyr::mutate(col_palette =
@@ -746,10 +715,9 @@ sight_map = sightings_clean %>%
                   species == "Fin whale" ~ "#F4D03F",
                   species == "Dolphin/Porpoise species" ~ "#566573",
                   species == "Grey whale" ~ "#AAB7B8",
-                  species == "Dolphin species" ~ "#1ABC9C",
                   species == "Sperm whale" ~ "blue",
                   species == "Unidentified whale" ~ "#B7950B",
-                  species == "Potential Turtle species" ~ "darkgreen" 
+                  species == "Potential turtle species" ~ "darkgreen" 
                 )) %>%
 dplyr::mutate(
   popup_content = ifelse(
@@ -777,8 +745,8 @@ sight_map %>%
     colors = c(unique(sight_map$col_palette)),
     labels = c(unique(sight_map$species)),
     opacity = 0.8
-   ) %>% 
-  leaflet::addMiniMap(toggleDisplay = TRUE) %>%
+   ) %>%
+  leaflet::addMiniMap(toggleDisplay = TRUE)
   # htmltools::save_html(., paste0("C:/Users/", 
   #                                user, 
   #                                "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/",
@@ -788,7 +756,7 @@ sight_map %>%
 
 ## Alerts
 
-alert_map = joined_tables %>%
+alert_map = alerts_detections %>%
   # dplyr::filter(lubridate::year(sent_at) == 2024) %>%
   dplyr::filter(dplyr::between(sent_at, as.Date("2024-04-01"), as.Date("2025-03-31"))) %>% 
   dplyr::mutate(col_palette =

@@ -33,26 +33,31 @@ US_EZZ = sf::read_sf(dsn = paste0("C:/Users/",
                      layer = "eez_v11") %>% 
   dplyr::filter(SOVEREIGN1 == "United States", MRGID == 8456)
 
+sf::st_write(
+  US_EZZ,
+  "C:/Users/AlexMitchell/Downloads/US_EEZ_filtered.shp"
+)
+
 ##~~~ Data manipulation ~~~######
 
-## US Sightings total
-# alerts_detections %>% 
-#   sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
-#   sf::st_make_valid() %>% 
-#   sf::st_join(x = ., 
-#               y = US_EZZ,
-#               join = sf::st_within) %>% 
-#   dplyr::filter(GEONAME == "United States Exclusive Economic Zone") %>%
-#   sf::st_drop_geometry() %>% 
-#   dplyr::select(sighting_id,sent_at) %>% 
-#   dplyr::distinct() %>% 
-#   dplyr::group_by(year_mon = zoo::as.yearmon(sent_at)) %>% 
-#   dplyr::summarise(count = dplyr::n()) %>% 
-#   dplyr::filter(
-#     ., dplyr::between(year_mon, 
-#                       zoo::as.yearmon("Jan 2024"), 
-#                       zoo::as.yearmon("Sep 2025"))
-#   )
+# US Sightings total
+alerts_detections %>%
+  sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>%
+  sf::st_make_valid() %>%
+  sf::st_join(x = .,
+              y = US_EZZ,
+              join = sf::st_within) %>%
+  dplyr::filter(GEONAME == "United States Exclusive Economic Zone") %>%
+  sf::st_drop_geometry() %>%
+  dplyr::select(sighting_id,sent_at) %>%
+  dplyr::distinct() %>%
+  dplyr::group_by(year_mon = zoo::as.yearmon(sent_at)) %>%
+  dplyr::summarise(count = dplyr::n()) %>%
+  dplyr::filter(
+    ., dplyr::between(year_mon,
+                      zoo::as.yearmon("Jan 2024"),
+                      zoo::as.yearmon("Sep 2025"))
+  )
 
 ##
 alert_us = alerts_detections %>% 
@@ -87,35 +92,31 @@ detections_us %>%
   
 
 ### Year on year change in alerts and sightings
-# 
-# n_sightings = alert_us %>% 
-#   sf::st_drop_geometry() %>% 
-#   # dplyr::group_by(year = lubridate::year(sent_at)) %>% 
-#   dplyr::group_by(year_mon = zoo::as.yearmon(sent_at)) %>%
-#   dplyr::summarize(count_sightings = dplyr::n_distinct(sighting_id)) 
-# 
-# 
-# n_alerts = alert_us %>% 
-#   sf::st_drop_geometry() %>% 
-#   # dplyr::group_by(year = lubridate::year(sent_at)) %>%
-#   dplyr::group_by(year_mon = zoo::as.yearmon(sent_at)) %>%
-#   dplyr::summarize(count_alerts = dplyr::n())
-# 
-# counts = dplyr::left_join(n_sightings, n_alerts) %>% 
-#   dplyr::filter(is.na(year) == F)
 
-## Drop this into excel and we can make a quick and easy graph that way for year on year growth
+n_sightings = alert_us %>%
+ sf::st_drop_geometry() %>%
+ # dplyr::group_by(year = lubridate::year(sent_at)) %>%
+ dplyr::group_by(year_mon = zoo::as.yearmon(sent_at)) %>%
+ dplyr::summarize(count_sightings = dplyr::n_distinct(sighting_id))
 
-### Continuous change in alerts and sightings
 
-# high_alerts_list = alert_us %>% 
-#   # dplyr::filter(sent_at > as.Date("2024-07-31") & sent_at < as.Date("2025-01-01")) %>% 
-#   dplyr::group_by(tracking_id) %>% 
-#   sf::st_drop_geometry() %>% 
-#   dplyr::summarise(number_of_alerts = dplyr::n()) %>% 
-#   dplyr::left_join(., user_clean) %>% 
-#   dplyr::filter(is.na(auth_id) == T)
+n_alerts = alert_us %>%
+ sf::st_drop_geometry() %>%
+ # dplyr::group_by(year = lubridate::year(sent_at)) %>%
+ dplyr::group_by(year_mon = zoo::as.yearmon(sent_at)) %>%
+ dplyr::summarize(count_alerts = dplyr::n())
 
+counts = dplyr::left_join(n_sightings, n_alerts) %>%
+ dplyr::filter(is.na(year_mon) == F)
+# Drop this into excel and we can make a quick and easy graph that way for year on year growth
+## Continuous change in alerts and sightings
+high_alerts_list = alert_us %>%
+ dplyr::filter(sent_at > as.Date("2024-07-31") & sent_at < as.Date("2025-01-01")) %>%
+ dplyr::group_by(tracking_id) %>%
+ sf::st_drop_geometry() %>%
+ dplyr::summarise(number_of_alerts = dplyr::n()) %>%
+ dplyr::left_join(., user_clean) %>%
+ dplyr::filter(is.na(auth_id) == T)
 
 
 monthly_detections = detections_us %>% 
@@ -422,7 +423,7 @@ plotly::plot_ly() %>%
 plot_data = detections_us %>%
   sf::st_drop_geometry() %>%
   dplyr::mutate(year_month = lubridate::floor_date(sighted_at, unit = "month")) %>%
-  dplyr::filter(year_month > as.Date("2023-01-01") & year_month < as.Date("2025-05-31")) %>% 
+  dplyr::filter(year_month > as.Date("2023-01-01") & year_month < as.Date("2025-06-30")) %>% 
   dplyr::filter(!is.na(source_entity)) %>%
   dplyr::group_by(year_month, source_entity) %>%
   dplyr::summarise(count = dplyr::n(), .groups = "drop")
@@ -504,7 +505,7 @@ plotly::plot_ly() %>%
 plot_data = alert_us %>%
   sf::st_drop_geometry() %>%
   dplyr::mutate(year_month = lubridate::floor_date(sighted_at, unit = "month")) %>%
-  dplyr::filter(year_month > as.Date("2023-01-01") & year_month < as.Date("2025-05-31")) %>% 
+  dplyr::filter(year_month > as.Date("2023-01-01") & year_month < as.Date("2025-06-30")) %>% 
   dplyr::filter(!is.na(source_entity)) %>%
   dplyr::group_by(year_month, source_entity) %>%
   dplyr::summarise(count = dplyr::n(), .groups = "drop")
@@ -628,6 +629,35 @@ high_alerts_list = alert_us %>%
   dplyr::summarise(number_of_alerts = dplyr::n()) %>% 
   dplyr::left_join(., user_clean) %>% 
   dplyr::filter(is.na(auth_id) == F)
+
+
+
+## DATA EXPORTS
+export = alert_us %>% 
+  dplyr::filter(sent_at > as.Date("2024-12-31")) %>% 
+  dplyr::as_tibble() %>%
+  dplyr::mutate(
+    longitude = sf::st_coordinates(geometry)[, 1],
+    latitude = sf::st_coordinates(geometry)[, 2]
+  ) %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(-geometry)
+
+openxlsx::write.xlsx(export, paste0("C:/Users/", user, "/Downloads/us-alerts-quietsound-", Sys.Date(),".xlsx"))
+
+export = detections_us %>% 
+  dplyr::filter(sighted_at > as.Date("2024-12-31")) %>% 
+  dplyr::as_tibble() %>%
+  dplyr::mutate(
+    longitude = sf::st_coordinates(geometry)[, 1],
+    latitude = sf::st_coordinates(geometry)[, 2]
+  ) %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(-geometry)
+
+openxlsx::write.xlsx(export, paste0("C:/Users/", user, "/Downloads/us-detections-quietsound-", Sys.Date(),".xlsx"))
+
+rm(export)
 
 
 ##~~~~~~~~~~~~~~~~~~~~~ Sandbox ~~~~~~~~~~~~~~~~~~~~~##

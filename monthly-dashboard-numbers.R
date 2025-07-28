@@ -45,6 +45,7 @@ ignore_ids =
     "auth0|61d60319deb6b60069830256", # Patrick Gallagher
     "auth0|65fe005349ddc30bde015041" # Emma Laqua - Ocean Wise
   )
+
 ## EXTRA STEP AS LAPIS MESSED UP THE DB. - this will take information from sightings spreadsheet and populate missing sightings data for alerts
 interim_sightings = sightings_clean %>% 
   dplyr::mutate(
@@ -146,7 +147,7 @@ perc_inc
 #### ~~~~~~~~~~~~~~~~ How many detections has each source made? ~~~~~~~~~~~~~~~~~~~~~~~ ####
 ## Sightings numbers
 detections_pre = detections_clean %>%
-  dplyr::select(-c(created_at, code)) %>%  # do this to remove errors caused by bugs which led to duplicates sent at same time with different
+  dplyr::select(-c(created_at)) %>%  # do this to remove errors caused by bugs which led to duplicates sent at same time with different
   dplyr::distinct()                             # created_at values
 
 detections = detections_pre %>%
