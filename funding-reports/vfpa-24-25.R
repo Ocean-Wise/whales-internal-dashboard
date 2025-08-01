@@ -39,7 +39,7 @@ get_ocean_wise_colors <- function(n) {
 
 ## Set pallete 
 source_colors = setNames(
-  get_ocean_wise_colors(length(unique(detections$source_entity))), 
+  get_ocean_wise_colors(length(unique(detections_pre$source_entity))), 
   unique(detections$source_entity)
   )
 
@@ -49,7 +49,7 @@ source_colors = setNames(
 
 ## Creating a simple clean detections data set for grant period
 period_detections = detections_pre %>% 
-  # dplyr::filter(source_entity %in% source_filter) %>% 
+  dplyr::filter(zoo::as.yearmon(sighted_at) < zoo::as.yearmon(Sys.Date())) %>%
   # dplyr::filter(dplyr::between(sighted_at, 
   #                              lubridate::as_date("2024-01-01"),
   #                              lubridate::rollback(lubridate::floor_date(Sys.Date(), unit = "month")))) %>% 
@@ -59,8 +59,8 @@ period_detections = detections_pre %>%
 
 
 ## and the same for alerts
-period_alerts = joined_tables %>% 
-  dplyr::filter(source_entity %in% source_filter) %>% 
+period_alerts = alerts_detections %>% 
+  dplyr::filter(zoo::as.yearmon(sighted_at) < zoo::as.yearmon(Sys.Date())) %>% 
   # dplyr::filter(dplyr::between(sent_at, 
   #                              lubridate::as_date("2024-01-01"),
   #                              lubridate::rollback(lubridate::floor_date(Sys.Date(), unit = "month")))) %>% 
@@ -73,15 +73,16 @@ period_alerts = joined_tables %>%
 ####~~~ Plots ~~~####
 
 ##~~ Data ~~####
-
-jasco_events = period_detections%>%
-  dplyr::filter(source_entity == "JASCO") %>%
-  dplyr::arrange(sighted_at) %>%
-  dplyr::mutate(
-    time_diff = as.numeric(sighted_at - dplyr::lag(sighted_at), units = "mins"),
-    new_event = dplyr::if_else(is.na(time_diff) | time_diff >= 30, 1, 0),
-    event_id = cumsum(new_event)
-  )
+# 
+# jasco_events = period_detections %>%
+#   dplyr::filter(source_entity == "JASCO") %>%
+#   dplyr::filter(lubridate::year(sighted_at) == 2025) %>%
+#   dplyr::arrange(sighted_at) %>%
+#   dplyr::mutate(
+#     time_diff = as.numeric(sighted_at - dplyr::lag(sighted_at), units = "mins"),
+#     new_event = dplyr::if_else(is.na(time_diff) | time_diff >= 30, 1, 0),
+#     event_id = cumsum(new_event)
+#   )
 
 detections = period_detections %>% 
   # dplyr::filter(source_entity %in% c("JASCO", "SMRU")) %>% 
@@ -121,12 +122,29 @@ make_lines_function = function(source){
                   year = lubridate::year(year_month)) %>% 
     dplyr::select(-year_month) %>% 
     tidyr::pivot_wider(names_from = year, values_from = c(detections, alerts)) %>% 
-    dplyr::filter(source_entity == "source") %>% 
+    # dplyr::mutate(dplyr::across(dplyr::everything(), ~tidyr::replace_na(.x, 0))) %>% 
+    dplyr::filter(source_entity == source) %>% 
     # dplyr::select(c(1,2,dplyr::ends_with("24"),dplyr::ends_with("25"))) %>% 
     dplyr::mutate(month = factor(month,
                                  levels = month.abb,  # c("Jan", "Feb", ..., "Dec")
                                  ordered = TRUE)) %>% 
-    dplyr::arrange(month)
+    dplyr::arrange(month) %>% 
+    dplyr::mutate(
+      month = factor(
+        month,
+        levels = lubridate::month(1:12, label = TRUE, abbr = TRUE),
+        ordered = TRUE
+      ),
+      current_month = factor(
+        lubridate::month(Sys.Date(), label = TRUE, abbr = TRUE),
+        levels = lubridate::month(1:12, label = TRUE, abbr = TRUE),
+        ordered = TRUE
+      )
+    ) %>%
+    dplyr::mutate(dplyr::across(
+      .cols = dplyr::starts_with("detections_") | dplyr::starts_with("alerts_"),
+      .fns = ~ dplyr::if_else(month < current_month & is.na(.x), 0, .x)
+    ))
   
   # make plot
   plotly::plot_ly(data = plot_data,
@@ -162,23 +180,7 @@ make_lines_function = function(source){
 
 
 # JASCO
-make_lines_function("JASCO") %>% 
-  plotly::layout(
-    shapes = list(
-      list(type = "line",
-           y0 = 0,
-           y1 = 1,
-           yref = "paper",
-           x0 = "Feb",
-           x1 = "Feb",
-           line = list(color = "B1B1B1", dash="dot"))
-    )
-  ) %>% 
-  plotly::add_text(showlegend = FALSE, 
-                   y = 80,
-                   x = factor("Mar", levels = month.abb, ordered = TRUE),
-                   text = "Confirming with JASCO \nthis 0 data is expected")
-
+make_lines_function("JASCO")
 
 # SMRU
 make_lines_function("SMRU") %>% 
@@ -194,7 +196,7 @@ make_lines_function("SMRU") %>%
     )
   ) %>% 
   plotly::add_text(showlegend = FALSE, 
-                   y = 80,
+                   y = 105,
                    x = factor("May", levels = month.abb, ordered = TRUE),
                    text = "SMRU Integrated \n Jun 24")
 
@@ -222,13 +224,11 @@ make_lines_function("WhaleSpotter") %>%
 
 ##~~ Day vs Night ~~####
 
-day_vs_night_function = function(
-    # year, 
-    source){
+day_vs_night_function = function(year, source){
 
     day_night_detections = period_detections %>% 
-      dplyr::filter(lubridate::year(sighted_at) == year) %>%
-      dplyr::filter(source_entity == source) %>% 
+      dplyr::filter(lubridate::year(sighted_at) == 2025) %>%
+      dplyr::filter(source_entity %in% c("Ocean Wise", "Orca Network", "Whale Alert")) %>% 
       dplyr::mutate(date = lubridate::as_date(sighted_at)) %>% 
       dplyr::distinct(sighted_at, date, latitude, longitude) %>%
       dplyr::rowwise() %>%
@@ -250,9 +250,9 @@ day_vs_night_function = function(
     )
     
     
-    period_detections %>% 
-      dplyr::filter(lubridate::year(sighted_at) == year) %>%
-      dplyr::filter(source_entity == source) %>% 
+    x = period_detections %>% 
+      dplyr::filter(lubridate::year(sighted_at) == 2025) %>%
+      dplyr::filter(source_entity %in% c("Ocean Wise", "Orca Network", "Whale Alert")) %>% 
       dplyr::left_join(day_night_detections, by = c("sighted_at", "latitude", "longitude")) %>% 
       dplyr::mutate(sighted_at = lubridate::force_tz(sighted_at, tzone = "America/Los_Angeles")) %>%
       dplyr::mutate(
@@ -283,10 +283,14 @@ day_vs_night_function = function(
       )
 }
 
+day_vs_night_function(2025, "Ocean Wise")
 day_vs_night_function(2025, "Orca Network")
-day_vs_night_function("Whale Spotter")
-day_vs_night_function(2025, "Whale Spotter")
+day_vs_night_function(2025, "WhaleSpotter")
+day_vs_night_function(2025, "JASCO")
+day_vs_night_function(2025, "SMRU")
 
+day_vs_night_function(2025, c("Ocean Wise", "Orca Network", "Whale Alert"))
+day_vs_night_function(2025, c("WhaleSpotter", "JASCO", "SMRU"))
 
 
 
@@ -295,11 +299,9 @@ day_vs_night_function(2025, "Whale Spotter")
 ##~~ Maps and spatial work ~~####
 # detection map
 
-
-
 alert_map = period_detections %>%
   ## EDIT THIS FOR REPORTING PERIOD
-  # dplyr::filter(lubridate::year(sighted_at) == 2025) %>% 
+  dplyr::filter(lubridate::year(sighted_at) == 2025) %>%
   dplyr::mutate(col_palette =
                   dplyr::case_when(
                     stringr::str_detect(source_entity, "WhaleSpotter") == T ~ "#A8007E",
@@ -361,10 +363,10 @@ alert_map %>%
 ## stacked bar graph of detections
 detections %>% 
   dplyr::ungroup() %>% 
-  dplyr::filter(lubridate::year(year_month) == 2024) %>% 
+  dplyr::filter(lubridate::year(year_month) == 2025) %>% 
   tidyr::complete(
     source_entity,
-    year_month = zoo::as.yearmon(paste(month.abb, 2024))
+    year_month = zoo::as.yearmon(paste(month.abb, 2025))
   ) %>%
   dplyr::mutate(detections = tidyr::replace_na(detections, 0)) %>% 
   dplyr::mutate(month = format(year_month, "%b")) %>%
@@ -384,6 +386,62 @@ detections %>%
     legend = list(orientation = "h", x = 0.1, y = -0.2)
   )
 
+## total quarterly detections
+detections %>% 
+  dplyr::filter(lubridate::year(year_month) == 2025) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(year_month) %>%
+  dplyr::summarise(total_detections = sum(detections, na.rm = TRUE))
+
+
+## stacked bar graph of alerts
+alerts %>% 
+  dplyr::ungroup() %>% 
+  dplyr::filter(lubridate::year(year_month) == 2025) %>% 
+  tidyr::complete(
+    source_entity,
+    year_month = zoo::as.yearmon(paste(month.abb, 2025))
+  ) %>%
+  dplyr::mutate(alerts = tidyr::replace_na(alerts, 0)) %>% 
+  dplyr::mutate(month = format(year_month, "%b")) %>%
+  dplyr::mutate(month = factor(month, levels = month.abb)) %>%
+  plotly::plot_ly(
+    data = .,
+    x = ~month,
+    y = ~alerts,
+    color = ~source_entity,
+    colors = source_colors,
+    type = "bar"
+  ) %>%
+  plotly::layout(
+    barmode = "stack",
+    xaxis = list(title = "", categoryorder = "array", categoryarray = month.abb),
+    yaxis = list(title = "Alerts"),
+    legend = list(orientation = "h", x = 0.1, y = -0.2)
+  )
+
+## total quarterly alerts
+alerts %>% 
+  dplyr::filter(lubridate::year(year_month) == 2025) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::group_by(year_month) %>%
+  dplyr::summarise(total_detections = sum(alerts, na.rm = TRUE))
+
+
+##~~ WhaleSpotter table ~~####
+
+whalespotter_species = detections_pre %>%
+  dplyr::filter(source_entity == "WhaleSpotter") %>% 
+  dplyr::group_by(year_mon = zoo::as.yearmon(sighted_at), source_entity, species) %>%
+  dplyr::summarise(n = dplyr::n())
+
+whalespotter_sightings_alerts = detections_pre %>%
+  dplyr::filter(source_entity == "WhaleSpotter") %>% 
+  dplyr::group_by(year_mon = zoo::as.yearmon(sighted_at), source_entity) %>%
+  dplyr::filter(id %in% alert_clean$sighting_id) %>% 
+  dplyr::summarise(n = dplyr::n())
+
+rm(list = "whalespotter_sightings_alerts", "whalespotter_species")
 
 ##~~ Regional data ~~####
 #load shapefile
@@ -414,13 +472,34 @@ area_alerts = period_alerts %>%
   dplyr::filter(is.na(region) == F) 
 
 
-
 ##~~ Areas ~~#### 
 
 map_maker_function = function(area){
   
   area_data = area_detections %>% 
-    dplyr::filter(region == area) 
+    dplyr::filter(region == area & lubridate::year(sighted_at) == 2025) %>% 
+    dplyr::mutate(species = 
+                    dplyr::case_when(
+                      stringr::str_detect(species, "dolphin") ~ "Dolphin/Porpoise species",
+                      stringr::str_detect(species, "porpoise") ~ "Dolphin/Porpoise species",
+                      stringr::str_detect(species, "turtle") ~ "Potential Turtle species",
+                      stringr::str_detect(species, "False") ~ "Dolphin/Porpoise species",
+                      stringr::str_detect(species, "Sei") ~ "Unidentified whale",
+                      .default = as.character(species)
+                    )) %>% 
+    dplyr::mutate(col_palette =
+                    dplyr::case_when(
+                      species == "Minke whale" ~ "#A569BD",
+                      species == "Killer whale" ~ "#17202A",
+                      species == "Humpback whale" ~ "#E74C3C",
+                      species == "Fin whale" ~ "#F4D03F",
+                      species == "Dolphin/Porpoise species" ~ "#566573",
+                      species == "Grey whale" ~ "#AAB7B8",
+                      species == "Dolphin species" ~ "#1ABC9C",
+                      species == "Sperm whale" ~ "blue",
+                      species == "Unidentified whale" ~ "#B7950B",
+                      species == "Potential Turtle species" ~ "darkgreen" 
+                    ))
   
    
   leaflet::leaflet(data = area_data) %>%
@@ -431,34 +510,20 @@ map_maker_function = function(area){
           group = "OpenSeaMap"
         ) %>%
     leaflet::addCircleMarkers(
-      data = dplyr::filter(area_data, species == "Killer whale"),
-      # lat = ~latitude,
-      # lng = ~longitude,
-      color = "black",
+      group = ~species,
+      color = ~col_palette,
       radius = 5,
       stroke = FALSE,
-      fillOpacity = 0.7
-    ) %>%
-    leaflet::addCircleMarkers(
-      data = dplyr::filter(area_data, grepl("Humpback", species, ignore.case = TRUE)),
-      # lat = ~latitude,
-      # lng = ~longitude,
-      color = "red",
-      radius = 5,
-      stroke = FALSE,
-      fillOpacity = 0.7
+      fillOpacity = 0.8
     ) %>%
     leaflet::addLegend(
-      position = "bottomright",
-      colors = c("black", "red"),
-      labels = c("Killer Whale", "Humpback Whale"),
-      title = "Species",
-      opacity = 1
-    ) %>%
+      "bottomright",
+      colors = c(unique(area_data$col_palette)),
+      labels = c(unique(area_data$species)),
+      opacity = 0.8
+    )  %>%
     leaflet::setView(lng = -123.5, lat = 48.5, zoom = 8)
 }
-
-map_maker_function("Swiftsure Bank")
 
 
 ## Monthly detections and alerts
@@ -486,7 +551,24 @@ make_regional_lines_function = function(area){
     dplyr::mutate(month = factor(base::month.abb[as.integer(lubridate::month(year_month))], levels = base::month.abb, ordered = TRUE),
                   year = lubridate::year(year_month)) %>% 
     dplyr::select(-year_month) %>% 
-    tidyr::pivot_wider(names_from = year, values_from = c(detections, alerts))
+    tidyr::pivot_wider(names_from = year, values_from = c(detections, alerts)) %>% 
+    dplyr::arrange(month) %>% 
+    dplyr::mutate(
+      month = factor(
+        month,
+        levels = lubridate::month(1:12, label = TRUE, abbr = TRUE),
+        ordered = TRUE
+      ),
+      current_month = factor(
+        lubridate::month(Sys.Date(), label = TRUE, abbr = TRUE),
+        levels = lubridate::month(1:12, label = TRUE, abbr = TRUE),
+        ordered = TRUE
+      )
+    ) %>%
+    dplyr::mutate(dplyr::across(
+      .cols = dplyr::starts_with("detections_") | dplyr::starts_with("alerts_"),
+      .fns = ~ dplyr::if_else(month < current_month & is.na(.x), 0, .x)
+    ))
   
   # make plot
   plotly::plot_ly(data = plot_data,
@@ -519,8 +601,6 @@ make_regional_lines_function = function(area){
     )
   
 }
-
-make_regional_lines_function("Boundary Pass")
 
 
 ## stacked bar graph of detections
@@ -556,7 +636,6 @@ area_bar_maker_function = function(area){
     )
 }
 
-area_bar_maker_function("Boundary Pass")
 
 
 # Day vs Nigh detections
@@ -566,7 +645,7 @@ day_vs_night_region_function = function(area){
   day_night_detections = area_detections %>% 
     sf::st_drop_geometry() %>%
     dplyr::filter(lubridate::year(sighted_at) == 2025) %>%
-    dplyr::filter(region == "Boundary Pass") %>% 
+    dplyr::filter(region == area) %>% 
     dplyr::mutate(date = lubridate::as_date(sighted_at)) %>% 
     dplyr::distinct(sighted_at, date, id) %>%
     dplyr::rowwise() %>%
@@ -591,7 +670,7 @@ day_vs_night_region_function = function(area){
   area_detections %>% 
     sf::st_drop_geometry() %>% 
     dplyr::filter(lubridate::year(sighted_at) == 2025) %>% 
-    dplyr::filter(region == "Boundary Pass") %>% 
+    dplyr::filter(region == area) %>% 
     dplyr::left_join(day_night_detections, by = c("id", "sighted_at")) %>% 
     dplyr::mutate(sighted_at = lubridate::force_tz(sighted_at, tzone = "America/Los_Angeles")) %>%
     dplyr::mutate(
@@ -622,7 +701,12 @@ day_vs_night_region_function = function(area){
     )
 }
 
-day_vs_night_function("Haro Strait")
+## UPDATE THESE TO RUN THE FUNCTION TO CREATE VISUALS WITH EITHER BOUNDARY PASS, HARO STRAIT, AND SWIFTSURE BANK
+
+map_maker_function("Swiftsure Bank")
+area_bar_maker_function("Swiftsure Bank")
+make_regional_lines_function("Swiftsure Bank")
+day_vs_night_region_function("Swiftsure Bank")
 
 ##~~~~~~~~~ sandbox ~~~~~~~~~~~####
 

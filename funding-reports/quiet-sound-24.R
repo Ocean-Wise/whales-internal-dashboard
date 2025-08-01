@@ -33,10 +33,6 @@ US_EZZ = sf::read_sf(dsn = paste0("C:/Users/",
                      layer = "eez_v11") %>% 
   dplyr::filter(SOVEREIGN1 == "United States", MRGID == 8456)
 
-sf::st_write(
-  US_EZZ,
-  "C:/Users/AlexMitchell/Downloads/US_EEZ_filtered.shp"
-)
 
 ##~~~ Data manipulation ~~~######
 
@@ -327,103 +323,12 @@ us_map %>%
 
 
 
-#### line graph alert source ####
-detections_source = detections_us %>% 
-  sf::st_drop_geometry() %>%
-  dplyr::select(c(species, source_entity, sighted_at)) %>% 
-  dplyr::distinct() %>% 
-  dplyr::filter(dplyr::between(zoo::as.yearmon(sighted_at),
-                               zoo::as.yearmon(start_date),
-                               zoo::as.yearmon(lubridate::rollback(lubridate::floor_date(Sys.Date(), 
-                                                                                         unit = "month"))))
-                ) %>% 
-  dplyr::group_by(source_entity, yearmon = zoo::as.yearmon(sighted_at)) %>% 
-  dplyr::summarise(detections = dplyr::n()) %>% 
-  dplyr::arrange(yearmon)
-
-alerts_source = alert_us %>% 
-  sf::st_drop_geometry() %>% 
-  dplyr::select(c(species, source_entity, sent_at)) %>% 
-  dplyr::distinct() %>% 
-  dplyr::filter(dplyr::between(zoo::as.yearmon(sent_at),
-                               zoo::as.yearmon(start_date),
-                               zoo::as.yearmon(lubridate::rollback(lubridate::floor_date(Sys.Date(), 
-                                                                                         unit = "month"))))
-  ) %>% 
-  dplyr::group_by(source_entity, yearmon = zoo::as.yearmon(sent_at)) %>% 
-  dplyr::summarise(alerts = dplyr::n()) %>% 
-  dplyr::arrange(yearmon)
-
-source_colors = c(
-  "Ocean Wise" = "#1f77a4",   # blue
-  "Orca Network" = "#9ab11e", # green
-  "SMRU" = "#ff3aff"          # Purple
-)
-
-source_details = detections_source %>% 
-  dplyr::left_join(alerts_source) %>% 
-  dplyr::mutate(yearmon = lubridate::my(yearmon),
-                year = lubridate::year(yearmon),
-                month = lubridate::month(yearmon, label = TRUE, abbr = TRUE)) %>% 
-  dplyr::mutate(line_dash = ifelse(year == 2024, "dash", "solid"),
-                opacity = ifelse(year == 2024, 0.5, 1),
-                line_group = paste(source_entity, year) # so we can group correctly
-                )
-
-
-source_details %>% 
-plotly::plot_ly() %>%
-  plotly::add_trace(
-    x = ~month,
-    y = ~detections,
-    mode = "line",
-    split = ~line_group,
-    opacity = ~opacity
-    # text = ~paste(source_entity, "<br>Year:", year, "<br>Month:", month, "<br>Detections:", detections),
-    # hoverinfo = "text"
-    # marker = list(color = source_colors[source_entity])
-  ) %>%
-  plotly::layout(
-    xaxis = list(title = ""),
-    yaxis = list(title = "Detections"),
-    barmode = "group",
-    legend = list(title = list(text = "<b>Source</b>"))
-  )
-
-## Detections
-plotly::plot_ly() %>%
-  plotly::add_trace(
-    data = source_details,
-    x = ~month,
-    y = ~detections,
-    # color = ~source_entity,
-    # colors = ~source_colors,
-    line = ~list(
-      dash = ifelse(year == 2024, "dash", "solid"),
-      width = 2,
-      color = source_colors[source_entity]
-    ),
-    mode = "lines",
-    split = ~line_group,
-    opacity = ~opacity,
-    text = ~paste(source_entity, "<br>Year:", year, "<br>Month:", month, "<br>Detections:", detections),
-    hoverinfo = "text",
-    type = "scatter"
-  ) %>%
-  plotly::layout(
-    xaxis = list(title = ""),
-    yaxis = list(title = "Detections"),
-    legend = list(title = list(text = "<b>Source</b>"))
-  )
-
-
-
-
-## Detection bar graph
+#### Detection bar graph ####
 plot_data = detections_us %>%
   sf::st_drop_geometry() %>%
   dplyr::mutate(year_month = lubridate::floor_date(sighted_at, unit = "month")) %>%
-  dplyr::filter(year_month > as.Date("2023-01-01") & year_month < as.Date("2025-06-30")) %>% 
+  # UPDATE THE DATE HERE!!!!!
+  dplyr::filter(year_month > as.Date("2023-01-01") & year_month < as.Date("2025-07-31")) %>% 
   dplyr::filter(!is.na(source_entity)) %>%
   dplyr::group_by(year_month, source_entity) %>%
   dplyr::summarise(count = dplyr::n(), .groups = "drop")
@@ -474,38 +379,12 @@ plotly::plot_ly(
 
 
 
-
-## Alerts
-plotly::plot_ly() %>%
-  plotly::add_trace(
-    data = source_details,
-    x = ~month,
-    y = ~alerts,
-    # color = ~source_entity,
-    # colors = ~source_colors,
-    line = ~list(
-      dash = ifelse(year == 2024, "dash", "solid"),
-      width = 2,
-      color = source_colors[source_entity]
-    ),
-    mode = "lines",
-    split = ~line_group,
-    opacity = ~opacity,
-    text = ~paste(source_entity, "<br>Year:", year, "<br>Month:", month, "<br>Detections:", detections, "<br>Alerts:", alerts),
-    hoverinfo = "text",
-    type = "scatter"
-  ) %>%
-  plotly::layout(
-    xaxis = list(title = ""),
-    yaxis = list(title = "Alerts"),
-    legend = list(title = list(text = "<b>Source</b>"))
-  )
-
-## Alert bar graph
+## Alert bar graph ####
 plot_data = alert_us %>%
   sf::st_drop_geometry() %>%
   dplyr::mutate(year_month = lubridate::floor_date(sighted_at, unit = "month")) %>%
-  dplyr::filter(year_month > as.Date("2023-01-01") & year_month < as.Date("2025-06-30")) %>% 
+  ## UPDATE THIS DATE!!!!
+  dplyr::filter(year_month > as.Date("2023-01-01") & year_month < as.Date("2025-07-31")) %>% 
   dplyr::filter(!is.na(source_entity)) %>%
   dplyr::group_by(year_month, source_entity) %>%
   dplyr::summarise(count = dplyr::n(), .groups = "drop")
@@ -551,6 +430,72 @@ plotly::plot_ly(
                                  size = 16,
                                  color = 'rgb(82, 82, 82)')))
 
+## Day and Night Whale Spotter ####
+## Calculate sunrise and sunset for each date in your dataset
+x = detections_clean %>%
+  dplyr::ungroup() %>% 
+  dplyr::filter(as.Date(sighted_at) >= as.Date("2025/01/01") & as.Date(sighted_at) <= as.Date("2025/07/31")) %>%
+  dplyr::filter(stringr::str_detect(source_entity, "WhaleSpotter") & org_name == "Quiet Sound") %>%  
+  # & stringr::str_detect(org_name, "Quiet Sound")) %>% 
+  dplyr::mutate(
+    sun_times = suncalc::getSunlightTimes(as.Date(sighted_at),
+                                          lat = 48.51566, 
+                                          lon = -123.1528)) %>% 
+  dplyr::mutate(sunrise = lubridate::ymd_hms(.$sun_times$sunrise, tz = "UTC") - lubridate::hours(7),
+                sunset = lubridate::ymd_hms(.$sun_times$sunset, tz = "UTC") - lubridate::hours(7)) %>% 
+  dplyr::select(id, sighted_at, latitude, longitude, 
+                species, source_entity, sunrise, sunset) %>% 
+  dplyr::mutate(day_night = 
+                  dplyr::case_when(dplyr::between(sighted_at, sunrise, sunset)  ~ "day",
+                                   TRUE  ~ "night"))
+
+openxlsx::write.xlsx(x,paste0("C:/Users/", user, "/Downloads/whalespotter-quietsound", Sys.Date(),".xlsx"))
+
+x  %>% 
+  dplyr::group_by(month = lubridate::month(sighted_at),day_night) %>% 
+  dplyr::summarise(count = dplyr::n()) %>% 
+  tidyr::pivot_wider(
+    names_from = day_night,
+    values_from = count
+  ) %>% 
+  dplyr::mutate(month_name = factor(month.name[month], levels = month.name)) %>% 
+  plotly::plot_ly(
+    x = ~month_name,
+    y = ~day,
+    type = "bar",
+    name = "Daylight hours",
+    marker = list(color = "#F2B949") 
+  ) %>% 
+  plotly::add_trace(
+    y = ~night,
+    name = "Outside daylight\n hours",
+    marker = list(color = "#6449F2")
+  ) %>% 
+  plotly::layout(xaxis = list(title = "",
+                              showline = TRUE,
+                              showgrid = FALSE,
+                              showticklabels = TRUE,
+                              linecolor = 'rgb(204, 204, 204)',
+                              linewidth = 2,
+                              autotick = T,
+                              ticks = 'outside',
+                              tickcolor = 'rgb(204, 204, 204)',
+                              tickwidth = 2,
+                              ticklength = 5,
+                              tickfont = list(family = 'Arial',
+                                              size = 16,
+                                              color = 'rgb(82, 82, 82)')),
+                 yaxis = list(title = list(text='No. detections', font = list(size = 16, family = 'Arial'), standoff = 25),
+                              showgrid = FALSE,
+                              zeroline = FALSE,
+                              showline = FALSE,
+                              showticklabels = T,
+                              tickfont = list(family = 'Arial',
+                                              size = 16,
+                                              color = 'rgb(82, 82, 82)')),
+                 barmode = "stack")
+
+
 
 ## User Growth ####
 
@@ -578,8 +523,7 @@ users_cumulative = dates %>%
   dplyr::left_join(users_overall, by = dplyr::join_by(value == year_qtr)) %>% 
   tidyr::fill(2:11,.direction = "down") %>% 
   dplyr::rename(year_qtr = value) %>% 
-  dplyr::mutate(dplyr::across(.cols = 2:11, ~tidyr::replace_na(.x,0))) %>% 
-  dplyr::select(-`NA`)
+  dplyr::mutate(dplyr::across(.cols = 2:11, ~tidyr::replace_na(.x,0)))
 
 ### PLOT ###
 ### Stacked bar chart 

@@ -54,6 +54,7 @@ interim_sightings = sightings_clean %>%
   ) %>% 
   dplyr::select(c(id, species, lat_new, lon_new))
 
+
 ## Create a dataframe with data which is NA in the latitude
 interim_1 = alerts_detections %>% 
   dplyr::filter(is.na(latitude)) %>% 
@@ -151,7 +152,7 @@ detections_pre = detections_clean %>%
   dplyr::distinct()                             # created_at values
 
 detections = detections_pre %>%
-  dplyr::group_by(year_mon = zoo::as.yearmon(sighted_at), source_entity,) %>%
+  dplyr::group_by(year_mon = zoo::as.yearmon(sighted_at), source_entity) %>%
   dplyr::summarise(n = dplyr::n()) %>%
   dplyr::filter(source_entity %in% source_filter) %>% 
   tidyr::pivot_wider(names_from = source_entity,
@@ -172,39 +173,38 @@ detections
 
 
 
-
 ####~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Sandbox ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 
 #### ~~~~~~~~~~~~~~~~ Where are the automated detection methods? ~~~~~~~~~~~~~~~~~~~~~~~ ####
-# locations = tibble::tibble(
-#   station_name = c("Lime Kiln", "Boundary Pass", "Carmanah Lighthouse", "Active Pass North", "Active Pass South", "Saturna Island"),
-#   station_type = c("hydrophone","hydrophone","infrared camera","infrared camera","infrared camera","infrared camera"),
-#   latitude = c(48.515834, 48.773653, 48.611406, 48.877781, 48.857528, 48.792393),
-#   longitude = c(-123.152978,  -123.042226, -124.751156, -123.316408, -123.344047, -123.096821))
-# #
-# #
-# # ## Map of locations with icons
-# #
-# icon_list = leaflet::iconList(
-#   "hydrophone" = leaflet::makeIcon(iconUrl = paste0("C:/Users/", user,
-#                                                  "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/icons_for_visuals/hydrophone.png"), iconWidth = 60, iconHeight = 60),
-#   "infrared camera" = leaflet::makeIcon(iconUrl = paste0("C:/Users/", user,
-#                                         "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/icons_for_visuals/ir_camera.png"), iconWidth = 38, iconHeight = 38)
-# )
-# #
-# locations %>%
-#   dplyr::filter(station_type == "infrared camera") %>%
-#   leaflet::leaflet() %>%
-#   leaflet::addTiles() %>%
-#   leaflet::addMarkers(
-#     ~longitude, ~latitude,
-#     icon = ~icon_list[station_type],
-#     label = ~paste("<b>Station Name:</b>", station_name, "<b>Type:</b>", station_type),
-#     leaflet::labelOptions(noHide = FALSE, textsize = "12px", direction = "auto")
-#   ) %>%
-#   # leaflet::addTitle("Stations Map",
-#   #                   leaflet::titleOpts = list(textsize = "24px", textOnly = TRUE)) %>%
-#   leaflet::addMiniMap(toggleDisplay = TRUE) %>%
-#   leaflet::setView(lng = -123.1207, lat = 49.2827, zoom = 6)
+locations = tibble::tibble(
+  station_name = c("Lime Kiln", "Boundary Pass", "Carmanah Lighthouse", "Active Pass North", "Active Pass South", "Saturna Island", "Quiet Sound"),
+  station_type = c("hydrophone","hydrophone","infrared camera","infrared camera","infrared camera","infrared camera", "infrared camera"),
+  latitude = c(48.515834, 48.773653, 48.611406, 48.877781, 48.857528, 48.792393, 48.143059),
+  longitude = c(-123.152978,  -123.042226, -124.751156, -123.316408, -123.344047, -123.096821,  -122.757130))
+#
+#
+# ## Map of locations with icons
+#
+icon_list = leaflet::iconList(
+  "hydrophone" = leaflet::makeIcon(iconUrl = paste0("C:/Users/", user,
+                                                 "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/icons_for_visuals/hydrophone.png"), iconWidth = 60, iconHeight = 60),
+  "infrared camera" = leaflet::makeIcon(iconUrl = paste0("C:/Users/", user,
+                                        "/Ocean Wise Conservation Association/Whales Initiative - General/Ocean Wise Data/visualizations/icons_for_visuals/ir_camera.png"), iconWidth = 38, iconHeight = 38)
+)
+#
+locations %>%
+  # dplyr::filter(station_type == "infrared camera") %>%
+  leaflet::leaflet() %>%
+  leaflet::addTiles() %>%
+  leaflet::addMarkers(
+    ~longitude, ~latitude,
+    icon = ~icon_list[station_type],
+    label = ~paste("<b>Station Name:</b>", station_name, "<b>Type:</b>", station_type),
+    leaflet::labelOptions(noHide = FALSE, textsize = "12px", direction = "auto")
+  ) %>%
+  # leaflet::addTitle("Stations Map",
+  #                   leaflet::titleOpts = list(textsize = "24px", textOnly = TRUE)) %>%
+  leaflet::addMiniMap(toggleDisplay = TRUE) %>%
+  leaflet::setView(lng = -123.1207, lat = 49.2827, zoom = 6)
 
 

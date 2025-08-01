@@ -15,10 +15,10 @@
 ##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
 
 # update this for the start date of period
-start_date = as.Date("2024-04-01")
+start_date = as.Date("2025-01-01")
 
 # update this for the end date of period
-end_date = as.Date("2025-03-31")
+end_date = as.Date("2025-06-30")
 
 
 ## Year on year growth of detection and alerts
@@ -92,7 +92,7 @@ sights_props = detections %>%
   
 
 ## Drop this into Excel and make a unit chart from the data
-sights_species = sights_pre %>% 
+sights_species = alerts_detections %>% 
   dplyr::mutate(species_id = dplyr::case_when(
     species_id == 1 ~ "Killer whale",
     species_id == 2 ~ "Humpback whale",
@@ -189,14 +189,15 @@ plotly::plot_ly(sights_species,
 ## Calculate sunrise and sunset for each date in your dataset
 x = detections_clean %>%
   dplyr::ungroup() %>% 
-  dplyr::filter(as.Date(sighted_at) > as.Date("2024/02/01") & as.Date(sighted_at) < as.Date("2025/06/30")) %>%
-  dplyr::filter(stringr::str_detect(source_entity, "WhaleSpotter") & stringr::str_detect(org_name, "Quiet Sound")) %>% 
+  dplyr::filter(as.Date(sighted_at) >= as.Date("2025/01/01") & as.Date(sighted_at) <= as.Date("2025/07/31")) %>%
+  dplyr::filter(stringr::str_detect(source_entity, "WhaleSpotter") & org_name == "Quiet Sound") %>%  
+# & stringr::str_detect(org_name, "Quiet Sound")) %>% 
   dplyr::mutate(
     sun_times = suncalc::getSunlightTimes(as.Date(sighted_at),
                                           lat = 48.51566, 
                                           lon = -123.1528)) %>% 
-  dplyr::mutate(sunrise = lubridate::ymd_hms(x$sun_times$sunrise, tz = "UTC") - lubridate::hours(7),
-                sunset = lubridate::ymd_hms(x$sun_times$sunset, tz = "UTC") - lubridate::hours(7)) %>% 
+  dplyr::mutate(sunrise = lubridate::ymd_hms(.$sun_times$sunrise, tz = "UTC") - lubridate::hours(7),
+                sunset = lubridate::ymd_hms(.$sun_times$sunset, tz = "UTC") - lubridate::hours(7)) %>% 
   dplyr::select(id, sighted_at, latitude, longitude, 
                 species, source_entity, sunrise, sunset) %>% 
   dplyr::mutate(day_night = 
