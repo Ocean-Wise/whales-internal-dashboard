@@ -1,7 +1,7 @@
-####~~~~~~~~~~~~~~~~~~~~~~Data Cleaning~~~~~~~~~~~~~~~~~~~~~~~####
 ## Author: Alex Mitchell
+####~~~~~~~~~~~~~~~~~~~~~~Data Cleaning~~~~~~~~~~~~~~~~~~~~~~~####
 ## Purpose: Clean and join all data to create main dataset
-## Date written: 2025-10-29
+## Date written: 2025-12-11
 
 ####~~~~~~~~~~~~~~~~~~~~~~Info~~~~~~~~~~~~~~~~~~~~~~~####
 ## This script creates the main dataset with one row per alert_user record
@@ -13,6 +13,43 @@
 ## For each sighting, identify the earliest report by sighting_date
 ## This will be the "primary" report used for detailed information
 primary_reports = report_raw %>%
+  ## Extract historical import data from comments column
+  dplyr::mutate(
+    # Extract Modality if present in comments
+    extracted_modality = stringr::str_extract(
+      comments, 
+      "(?<=Modality: )[^|]+"
+    ) %>% stringr::str_trim(),
+    # Extract Source Entity if present in comments
+    extracted_source_entity = stringr::str_extract(
+      comments, 
+      "(?<=Source Entity: )[^|]+"
+    ) %>% stringr::str_trim(),
+    # Use extracted values if they exist, otherwise keep original
+    modality = dplyr::coalesce(extracted_modality, modality),
+    source_entity = dplyr::coalesce(extracted_source_entity, source_entity)
+  ) %>%
+  dplyr::select(-extracted_modality, -extracted_source_entity) %>%
+  ## Clean up source_entity - keep original if it's an API user, otherwise set to Ocean Wise
+  dplyr::mutate(
+    source_entity = dplyr::case_when(
+      # Keep original value if it matches Orca Network pattern
+      stringr::str_detect(source_entity, stringr::regex("orca\\s*network", ignore_case = TRUE)) ~ "Orca Network via Conserve.io app",
+      stringr::str_detect(source_entity, stringr::regex("acartia", ignore_case = TRUE)) ~ "Orca Network via Conserve.io app",
+      # Keep original value if it matches WhaleSpotter pattern
+      stringr::str_detect(source_entity, stringr::regex("whale\\s*spotter", ignore_case = TRUE)) ~ source_entity,
+      # Keep original value if it matches JASCO pattern
+      stringr::str_detect(source_entity, stringr::regex("jasco", ignore_case = TRUE)) ~ "JASCO",
+      # Keep original value if it matches SMRU pattern (including SMRUC)
+      stringr::str_detect(source_entity, stringr::regex("smru[c]?", ignore_case = TRUE)) ~ "SMRU",
+      # Keep original value if it matches Whale Alert pattern
+      stringr::str_detect(source_entity, stringr::regex("whale\\s*alert", ignore_case = TRUE)) ~ source_entity,
+      # SWAG
+      stringr::str_detect(source_entity, stringr::regex("swag", ignore_case = TRUE)) ~ source_entity,
+      # Everything else becomes Ocean Wise
+      TRUE ~ "Ocean Wise Conservation Association"
+    )
+  ) %>% 
   dplyr::filter(!is.na(sighting_id)) %>%
   dplyr::group_by(sighting_id) %>%
   dplyr::arrange(sighting_date) %>%
@@ -43,6 +80,10 @@ primary_reports = report_raw %>%
     report_vessel_name = vessel_name,
     report_status = status
   )
+
+# x = primary_reports %>% 
+#   dplyr::group_by(yearmon = zoo::as.yearmon(report_sighting_date), report_source_entity) %>% 
+#   dplyr::summarise(count = dplyr::n())
 
 ## Count total reports per sighting
 reports_per_sighting = report_raw %>%
@@ -159,37 +200,22 @@ organization_clean = organization_raw %>%
 
 ####~~~~~~~~~~~~~~~~~~~~~~Step 3: Build Main Dataset~~~~~~~~~~~~~~~~~~~~~~~####
 
-## Start with alert_user as the base (one row per delivery attempt)
-main_dataset = alert_user_clean %>%
-  ## Join to alert
-  dplyr::left_join(
-    alert_clean,
-    by = "alert_id"
-  ) %>%
-  ## Join to sighting
-  dplyr::left_join(
-    sighting_clean,
-    by = "sighting_id"
-  ) %>%
+## CRITICAL: Start with sightings as the base to preserve ALL sightings
+## (whether they generated alerts or not)
+
+## First, create base sighting dataset with primary report info
+sightings_base = sighting_clean %>%
   ## Join to primary report
   dplyr::left_join(
     primary_reports,
     by = "sighting_id"
   ) %>%
+  ## Remove reports with a source
+  dplyr::filter(!is.na(report_source_entity)) %>% 
   ## Join to report count
   dplyr::left_join(
     reports_per_sighting,
     by = "sighting_id"
-  ) %>%
-  ## Join to user (recipient)
-  dplyr::left_join(
-    user_clean,
-    by = "user_id"
-  ) %>%
-  ## Join to alert type
-  dplyr::left_join(
-    alert_type_clean,
-    by = "alert_type_id"
   ) %>%
   ## Join to observer
   dplyr::left_join(
@@ -210,17 +236,42 @@ main_dataset = alert_user_clean %>%
   dplyr::left_join(
     user_clean,
     by = c("observer_user_id" = "user_id"),
-    suffix = c("_recipient", "_submitter")
+    suffix = c("", "_submitter")
+  ) %>%
+  ## Join to submitter organization
+  dplyr::left_join(
+    organization_clean %>% dplyr::rename(submitter_org_name = organization_name),
+    by = c("user_organization_id" = "organization_id")
+  )
+
+
+## Now LEFT JOIN alerts and alert_user to preserve sightings without alerts
+main_dataset = sightings_base %>%
+  ## LEFT JOIN to alert (sightings without alerts will have NA)
+  dplyr::left_join(
+    alert_clean,
+    by = "sighting_id"
+  ) %>%
+  ## LEFT JOIN to alert_user (expands to one row per delivery attempt)
+  dplyr::left_join(
+    alert_user_clean,
+    by = "alert_id"
+  ) %>%
+  ## Join to user (recipient) - will be NA for sightings without alerts
+  dplyr::left_join(
+    user_clean,
+    by = "user_id",
+    suffix = c("_submitter", "_recipient")
+  ) %>%
+  ## Join to alert type
+  dplyr::left_join(
+    alert_type_clean,
+    by = "alert_type_id"
   ) %>%
   ## Join to recipient organization
   dplyr::left_join(
     organization_clean %>% dplyr::rename(recipient_org_name = organization_name),
     by = c("user_organization_id_recipient" = "organization_id")
-  ) %>%
-  ## Join to submitter organization
-  dplyr::left_join(
-    organization_clean %>% dplyr::rename(submitter_org_name = organization_name),
-    by = c("user_organization_id_submitter" = "organization_id")
   )
 
 ## Join dictionary fields for human-readable values
@@ -266,11 +317,11 @@ main_dataset = main_dataset %>%
 
 ####~~~~~~~~~~~~~~~~~~~~~~Step 4: Apply Filters~~~~~~~~~~~~~~~~~~~~~~~####
 
-## Filter by date range
+## Filter by date range (using sighting_start for consistency)
 main_dataset = main_dataset %>%
   dplyr::filter(
-    alert_user_created_at >= start_date,
-    alert_user_created_at <= end_date
+    sighting_start >= start_date,
+    sighting_start <= end_date
   )
 
 ## Filter by source entity (if source_filter is defined)
@@ -279,15 +330,15 @@ if (length(source_filter) > 0) {
     dplyr::filter(report_source_entity %in% source_filter | is.na(report_source_entity))
 }
 
-## Filter out test users (if test_user_ids is populated)
+## Filter out test users (if test_user_ids is populated) - only for recipient rows
 if (length(test_user_ids) > 0) {
   main_dataset = main_dataset %>%
-    dplyr::filter(!user_id %in% test_user_ids)
+    dplyr::filter(is.na(user_id) | !user_id %in% test_user_ids)
 }
 
-## Filter out 'push' notifications (not used)
+## Filter out 'push' notifications (not used) - only matters for rows with alerts
 main_dataset = main_dataset %>%
-  dplyr::filter(alert_type_name != "push" | is.na(alert_type_name))
+  dplyr::filter(is.na(alert_type_name) | alert_type_name != "push")
 
 ## Remove any completely duplicate rows
 main_dataset = main_dataset %>%
@@ -298,19 +349,26 @@ main_dataset = main_dataset %>%
 ## Add date/time components for easier analysis
 main_dataset = main_dataset %>%
   dplyr::mutate(
+    ## Alert dates (will be NA for sightings without alerts)
     alert_year = lubridate::year(alert_user_created_at),
     alert_month = lubridate::month(alert_user_created_at),
     alert_year_month = zoo::as.yearmon(alert_user_created_at),
     alert_date = lubridate::as_date(alert_user_created_at),
+    ## Sighting dates (always present)
     sighting_year = lubridate::year(sighting_start),
     sighting_month = lubridate::month(sighting_start),
-    sighting_year_month = zoo::as.yearmon(sighting_start)
+    sighting_year_month = zoo::as.yearmon(sighting_start),
+    sighting_date = lubridate::as_date(sighting_start)
   )
 
-## Create a combined user name for recipient and include vessel name
+## Create a combined user name for recipient and submitter, include vessel name
 main_dataset = main_dataset %>%
   dplyr::mutate(
-    recipient_full_name = paste(user_firstname_recipient, user_lastname_recipient),
+    recipient_full_name = dplyr::if_else(
+      !is.na(user_firstname_recipient),
+      paste(user_firstname_recipient, user_lastname_recipient),
+      NA_character_
+    ),
     submitter_full_name = dplyr::case_when(
       !is.na(user_firstname_submitter) ~ paste(user_firstname_submitter, user_lastname_submitter),
       !is.na(observer_name) ~ observer_name,
@@ -319,23 +377,70 @@ main_dataset = main_dataset %>%
     vessel_name = report_vessel_name
   )
 
-## Flag successful deliveries (sent status only)
+## Flag successful deliveries (sent status only) - NA for sightings without alerts
 main_dataset = main_dataset %>%
   dplyr::mutate(
-    delivery_successful = status == "sent"
+    delivery_successful = dplyr::case_when(
+      is.na(status) ~ NA,  # No alert sent
+      status == "sent" ~ TRUE,
+      TRUE ~ FALSE
+    ),
+    ## Flag whether this sighting generated any alert
+    has_alert = !is.na(alert_id)
   )
+
+## Alter report_source_entity to follow API submitters, not user submitted organization
+# main_dataset = main_dataset %>% 
+#   dplyr::mutate(
+#     report_source_entity = dplyr::case_when(
+#       # Orca Network (ignore case, flexible spacing)
+#       stringr::str_detect(report_source_entity, stringr::regex("orca\\s*network", ignore_case = TRUE)) ~ report_source_entity,
+#       stringr::str_detect(report_source_entity, stringr::regex("acartia", ignore_case = TRUE)) ~ report_source_entity,
+#       # WhaleSpotter (ignore case, flexible spacing)
+#       stringr::str_detect(report_source_entity, stringr::regex("whale\\s*spotter", ignore_case = TRUE)) ~ report_source_entity,
+#       # JASCO (ignore case)
+#       stringr::str_detect(report_source_entity, stringr::regex("jasco", ignore_case = TRUE)) ~ "JASCO",
+#       # SMRU (ignore case, handle SMRUC variant)
+#       stringr::str_detect(report_source_entity, stringr::regex("smru[c]?", ignore_case = TRUE)) ~ "SMRU",
+#       # Whale Alert (ignore case, flexible spacing, handle Alaska variant)
+#       stringr::str_detect(report_source_entity, stringr::regex("whale\\s*alert", ignore_case = TRUE)) ~ report_source_entity,
+#       # SWAG
+#       stringr::str_detect(report_source_entity, stringr::regex("swag", ignore_case = TRUE)) ~ report_source_entity,
+#       # Everything else is Ocean Wise
+#       TRUE ~ "Ocean Wise Conservation Association"
+#     )
+#   ) 
+
+## TEMPORARY - Change Whale Alert observer_type_name from public to external_org
+main_dataset = main_dataset %>% 
+  dplyr::mutate(
+    observer_type_name = dplyr::case_when(
+      stringr::str_detect(report_source_entity, stringr::regex("whale\\s*alert", ignore_case = TRUE)) ~ "external_org",
+      TRUE ~ observer_type_name
+    )
+  )
+      
 
 ####~~~~~~~~~~~~~~~~~~~~~~Data Summary~~~~~~~~~~~~~~~~~~~~~~~####
 
-cat("\n====== main Dataset Summary ======\n")
-cat("Total alert_user records:", nrow(main_dataset), "\n")
-cat("Date range:", 
-    format(min(main_dataset$alert_user_created_at, na.rm = TRUE), "%Y-%m-%d"), "to",
-    format(max(main_dataset$alert_user_created_at, na.rm = TRUE), "%Y-%m-%d"), "\n")
+cat("\n====== Main Dataset Summary ======\n")
+cat("Total rows (sighting-alert-user combinations):", nrow(main_dataset), "\n")
+cat("Date range (sightings):", 
+    format(min(main_dataset$sighting_start, na.rm = TRUE), "%Y-%m-%d"), "to",
+    format(max(main_dataset$sighting_start, na.rm = TRUE), "%Y-%m-%d"), "\n")
+cat("\n--- Sighting Coverage ---\n")
 cat("Unique sightings:", dplyr::n_distinct(main_dataset$sighting_id, na.rm = TRUE), "\n")
+cat("Sightings WITH alerts:", sum(!is.na(main_dataset$alert_id) & main_dataset$sighting_id == dplyr::first(main_dataset$sighting_id), na.rm = TRUE), "\n")
+cat("Sightings WITHOUT alerts:", sum(is.na(main_dataset$alert_id)), "\n")
+cat("Alert generation rate:", 
+    sprintf("%.1f%%", 100 * dplyr::n_distinct(main_dataset$alert_id[!is.na(main_dataset$alert_id)], na.rm = TRUE) / 
+              dplyr::n_distinct(main_dataset$sighting_id, na.rm = TRUE)), "\n")
+cat("\n--- Alert Coverage ---\n")
 cat("Unique alerts:", dplyr::n_distinct(main_dataset$alert_id, na.rm = TRUE), "\n")
 cat("Unique recipients:", dplyr::n_distinct(main_dataset$user_id, na.rm = TRUE), "\n")
-cat("Alert types:\n")
+cat("Total delivery attempts:", sum(!is.na(main_dataset$alert_user_id)), "\n")
+cat("Successful deliveries:", sum(main_dataset$delivery_successful == TRUE, na.rm = TRUE), "\n")
+cat("\nAlert types:\n")
 print(table(main_dataset$alert_type_name, useNA = "ifany"))
 cat("\nAlert status:\n")
 print(table(main_dataset$status, useNA = "ifany"))
@@ -352,6 +457,43 @@ cat("=====================================\n")
 
 ## Step 1: For reports WITH sighting_id, get the earliest report per sighting
 sightings_with_id = report_raw %>%
+  ## Extract historical import data from comments column
+  dplyr::mutate(
+    # Extract Modality if present in comments
+    extracted_modality = stringr::str_extract(
+      comments, 
+      "(?<=Modality: )[^|]+"
+    ) %>% stringr::str_trim(),
+    # Extract Source Entity if present in comments
+    extracted_source_entity = stringr::str_extract(
+      comments, 
+      "(?<=Source Entity: )[^|]+"
+    ) %>% stringr::str_trim(),
+    # Use extracted values if they exist, otherwise keep original
+    modality = dplyr::coalesce(extracted_modality, modality),
+    source_entity = dplyr::coalesce(extracted_source_entity, source_entity)
+  ) %>%
+  dplyr::select(-extracted_modality, -extracted_source_entity) %>%
+  ## Clean up source_entity - keep original if it's an API user, otherwise set to Ocean Wise
+  dplyr::mutate(
+    source_entity = dplyr::case_when(
+      # Keep original value if it matches Orca Network pattern
+      stringr::str_detect(source_entity, stringr::regex("orca\\s*network", ignore_case = TRUE)) ~ source_entity,
+      stringr::str_detect(source_entity, stringr::regex("acartia", ignore_case = TRUE)) ~ source_entity,
+      # Keep original value if it matches WhaleSpotter pattern
+      stringr::str_detect(source_entity, stringr::regex("whale\\s*spotter", ignore_case = TRUE)) ~ source_entity,
+      # Keep original value if it matches JASCO pattern
+      stringr::str_detect(source_entity, stringr::regex("jasco", ignore_case = TRUE)) ~ "JASCO",
+      # Keep original value if it matches SMRU pattern (including SMRUC)
+      stringr::str_detect(source_entity, stringr::regex("smru[c]?", ignore_case = TRUE)) ~ "SMRU",
+      # Keep original value if it matches Whale Alert pattern
+      stringr::str_detect(source_entity, stringr::regex("whale\\s*alert", ignore_case = TRUE)) ~ source_entity,
+      # SWAG
+      stringr::str_detect(source_entity, stringr::regex("swag", ignore_case = TRUE)) ~ source_entity,
+      # Everything else becomes Ocean Wise
+      TRUE ~ "Ocean Wise Conservation Association"
+    )
+  ) %>% 
   dplyr::filter(!is.na(sighting_id)) %>%
   dplyr::group_by(sighting_id) %>%
   dplyr::arrange(sighting_date) %>%
@@ -529,10 +671,10 @@ sightings_main = sightings_with_id %>%
     sighting_month = lubridate::month(sighting_date),
     sighting_year_month = zoo::as.yearmon(sighting_date)
   ) %>%
-  ## Add OW as report source
-  dplyr::mutate(
-    report_source_entity = tidyr::replace_na(report_source_entity, "Ocean Wise Conservation Association")
-  ) %>% 
+  # ## Add OW as report source
+  # dplyr::mutate(
+  #   report_source_entity = tidyr::replace_na(report_source_entity, "Ocean Wise Conservation Association")
+  # ) %>% 
   # ## Apply filters
   # dplyr::filter(
   #   sighting_date >= start_date,
@@ -545,14 +687,16 @@ sightings_main = sightings_with_id %>%
   dplyr::distinct()
 
 ## Create a dataset for unique alerts (one per sighting-user combination)
+## Only include rows where alerts were actually sent
 alerts_main = main_dataset %>%
-  dplyr::filter(delivery_successful == TRUE) %>%
+  dplyr::filter(!is.na(alert_id) & delivery_successful == TRUE) %>%
   dplyr::group_by(sighting_id, user_id) %>%
   dplyr::summarise(
     alert_id = dplyr::first(alert_id),
     alert_created_at = dplyr::first(alert_created_at),
     alert_user_created_at = dplyr::first(alert_user_created_at),
     sighting_start = dplyr::first(sighting_start),
+    sighting_date = dplyr::first(sighting_date),
     species_name = dplyr::first(species_name),
     report_source_entity = dplyr::first(report_source_entity),
     report_latitude = dplyr::first(report_latitude),
@@ -561,6 +705,9 @@ alerts_main = main_dataset %>%
     alert_year = dplyr::first(alert_year),
     alert_month = dplyr::first(alert_month),
     alert_year_month = dplyr::first(alert_year_month),
+    sighting_year = dplyr::first(sighting_year),
+    sighting_month = dplyr::first(sighting_month),
+    sighting_year_month = dplyr::first(sighting_year_month),
     ## Aggregate delivery methods
     delivery_methods = paste(sort(unique(alert_type_name)), collapse = ", "),
     num_delivery_methods = dplyr::n_distinct(alert_type_name),
