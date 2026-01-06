@@ -1,37 +1,60 @@
 ####~~~~~~~~~~~~~~~~~~~~~~Metrics & Visualizations~~~~~~~~~~~~~~~~~~~~~~~####
 ## Author: Alex Mitchell
-## Purpose: Compare April-December 2023 vs 2025 metrics
+## Purpose: Compare data from different years
 ## Date written: 2025-12-09
 
 ####~~~~~~~~~~~~~~~~~~~~~~Setup~~~~~~~~~~~~~~~~~~~~~~~####
 ## Note: Using namespacing instead of loading libraries
 
-## Define comparison period (April-December)
-comparison_months = 5:12
-comparison_years = c(2023, 2025)
+## Define comparison period
+comparison_months = 1:12
+comparison_years = c(2019,2020,2021,2022,2023)
+## Flexible comparison years (can support up to 5 years)
+## Inherits from config.R if available, otherwise uses default
+if (!exists("comparison_years")) {
+  comparison_years = c(2023, 2025)  # Default fallback
+}
 
 ####~~~~~~~~~~~~~~~~~~~~~~Filter Data to Comparison Period~~~~~~~~~~~~~~~~~~~~~~~####
 
-## Filter main_dataset for comparison period
+## Filter main_dataset for comparison period and exclude BCHN/SWAG
 main_comparison = main_dataset %>%
   dplyr::filter(
     alert_year %in% comparison_years,
     alert_month %in% comparison_months
   )
 
-## Filter sightings_main for comparison period
+## Apply BCHN/SWAG exclusion if exclude_sources exists from config.R
+if (exists("exclude_sources") && length(exclude_sources) > 0) {
+  main_comparison = main_comparison %>%
+    dplyr::filter(!report_source_entity %in% exclude_sources | is.na(report_source_entity))
+}
+
+## Filter sightings_main for comparison period and exclude BCHN/SWAG
 sightings_comparison = sightings_main %>%
   dplyr::filter(
     sighting_year %in% comparison_years,
     sighting_month %in% comparison_months
   )
 
-## Filter alerts_main for comparison period
+## Apply BCHN/SWAG exclusion if exclude_sources exists from config.R
+if (exists("exclude_sources") && length(exclude_sources) > 0) {
+  sightings_comparison = sightings_comparison %>%
+    dplyr::filter(!report_source_entity %in% exclude_sources | is.na(report_source_entity))
+}
+
+## Filter alerts_main for comparison period and exclude BCHN/SWAG
 alerts_comparison = alerts_main %>%
   dplyr::filter(
     alert_year %in% comparison_years,
     alert_month %in% comparison_months
   )
+
+## Apply BCHN/SWAG exclusion if exclude_sources exists from config.R
+if (exists("exclude_sources") && length(exclude_sources) > 0) {
+  alerts_comparison = alerts_comparison %>%
+    dplyr::filter(!report_source_entity %in% exclude_sources | is.na(report_source_entity))
+}
 
 ####~~~~~~~~~~~~~~~~~~~~~~1. Unique Users Receiving Notifications~~~~~~~~~~~~~~~~~~~~~~~####
 
@@ -388,89 +411,76 @@ tryCatch({
 
 ####~~~~~~~~~~~~~~~~~~~~~~7. Breakdown by Source Entity per Month~~~~~~~~~~~~~~~~~~~~~~~####
 
-## Sightings by source per month
+## Sightings by source per month using CONDENSED source names
 source_breakdown = sightings_comparison %>%
-  dplyr::group_by(sighting_year, sighting_month, report_source_entity) %>%
+  dplyr::mutate(
+    ## Use condensed source if available, otherwise fall back to report_source_entity
+    source_display = dplyr::if_else(
+      !is.na(report_source_condensed),
+      report_source_condensed,
+      tidyr::replace_na(report_source_entity, "Unknown")
+    )
+  ) %>%
+  dplyr::group_by(sighting_year, sighting_month, source_display) %>%
   dplyr::summarise(
     total_sightings = dplyr::n(),
     .groups = "drop"
-  ) %>%
-  dplyr::mutate(
-    report_source_entity = tidyr::replace_na(report_source_entity, "Unknown")
   )
 
 ## Total by source per year
 source_totals = source_breakdown %>%
-  dplyr::group_by(sighting_year, report_source_entity) %>%
+  dplyr::group_by(sighting_year, source_display) %>%
   dplyr::summarise(
     total_sightings = sum(total_sightings),
     .groups = "drop"
   )
 
-print("=== Sightings by Source Entity ===")
+print("=== Sightings by Condensed Source Entity ===")
 print(source_totals)
 
 ## Visualization: Stacked bar chart by source
-## Create separate plots for each year
-source_2023 = source_breakdown %>% dplyr::filter(sighting_year == 2023)
-source_2025 = source_breakdown %>% dplyr::filter(sighting_year == 2025)
+## Create separate plots for each year - dynamically handle any number of comparison years
+plots_list = list()
 
-## Get unique sources and assign colors
-unique_sources = unique(source_breakdown$report_source_entity)
-source_colors = setNames(get_ocean_wise_colors(length(unique_sources)), unique_sources)
+for (year in sort(comparison_years)) {
+  source_year = source_breakdown %>% dplyr::filter(sighting_year == year)
 
-p7_2023 = plotly::plot_ly(source_2023,
-                          x = ~sighting_month,
-                          y = ~total_sightings,
-                          color = ~report_source_entity,
-                          colors = source_colors,
-                          type = 'bar') %>%
-  plotly::layout(
-    barmode = 'stack',
-    xaxis = list(
-      showgrid = FALSE,
-      zeroline = FALSE,
-      showticklabels = FALSE
-    ),
-    yaxis = list(
-      showgrid = TRUE,
-      gridcolor = 'lightgray',
-      zeroline = FALSE
-    ),
-    plot_bgcolor = 'white',
-    paper_bgcolor = 'white',
-    showlegend = TRUE
-  )
+  ## Get unique sources and assign colors
+  unique_sources = unique(source_breakdown$source_display)
+  source_colors = setNames(get_ocean_wise_colors(length(unique_sources)), unique_sources)
 
-p7_2025 = plotly::plot_ly(source_2025,
-                          x = ~sighting_month,
-                          y = ~total_sightings,
-                          color = ~report_source_entity,
-                          colors = source_colors,
-                          type = 'bar') %>%
-  plotly::layout(
-    barmode = 'stack',
-    xaxis = list(
-      showgrid = FALSE,
-      zeroline = FALSE,
-      showticklabels = FALSE
-    ),
-    yaxis = list(
-      showgrid = TRUE,
-      gridcolor = 'lightgray',
-      zeroline = FALSE
-    ),
-    plot_bgcolor = 'white',
-    paper_bgcolor = 'white',
-    showlegend = TRUE
-  )
+  plots_list[[as.character(year)]] = plotly::plot_ly(source_year,
+                            x = ~sighting_month,
+                            y = ~total_sightings,
+                            color = ~source_display,
+                            colors = source_colors,
+                            type = 'bar',
+                            name = ~source_display) %>%
+    plotly::layout(
+      barmode = 'stack',
+      xaxis = list(
+        showgrid = FALSE,
+        zeroline = FALSE,
+        showticklabels = FALSE
+      ),
+      yaxis = list(
+        showgrid = TRUE,
+        gridcolor = 'lightgray',
+        zeroline = FALSE
+      ),
+      plot_bgcolor = 'white',
+      paper_bgcolor = 'white',
+      showlegend = TRUE
+    )
+}
 
-p7 = plotly::subplot(p7_2023, p7_2025, nrows = 2, shareX = TRUE, titleY = TRUE)
+## Combine all plots (handles 2-5 years dynamically)
+p7 = plotly::subplot(plots_list, nrows = length(comparison_years), shareX = TRUE, titleY = TRUE)
 
 print(p7)
 htmlwidgets::saveWidget(p7, "/mnt/user-data/outputs/source_breakdown_per_month.html", selfcontained = TRUE)
 tryCatch({
-  plotly::orca(p7, "/mnt/user-data/outputs/source_breakdown_per_month.png", width = 1200, height = 800)
+  plotly::orca(p7, "/mnt/user-data/outputs/source_breakdown_per_month.png", width = 1200, height = max(800, 400 * length(comparison_years)))
 }, error = function(e) {
   cat("Note: PNG export requires plotly orca. HTML file saved instead.\n")
 })

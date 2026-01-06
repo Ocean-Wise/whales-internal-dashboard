@@ -23,17 +23,37 @@ connect = DBI::dbConnect(
 ####~~~~~~~~~~~~~~~~~~~~~~Global Variables~~~~~~~~~~~~~~~~~~~~~~~####
 
 ## Date range for analysis (easily configurable)
-# start_date = lubridate::as_date("2019-01-01")
-# end_date = lubridate::today()
+start_date = lubridate::as_date("2019-01-01")
+end_date = lubridate::today()
 
 ## Source filter - which data providers to include
 # source_filter = c("Ocean Wise", "Orca Network", "WhaleSpotter", "JASCO", "SMRU", "Whale Alert")
 source_filter = c()
 # source_enitity_recode = c("Orca Network", "WhaleSpotter", "JASCO", "SMRU", "Whale Alert")
-## Create a regex pattern that matches any of these to filter for data we are allowed to share. 
+
+## Create a regex pattern that matches any of these to filter for data we are allowed to share.
 # ocean_wise_data_only = paste(c("Orca Network", "WhaleSpotter", "JASCO", "SMRU", "Whale Alert", "testing", "BCHN/SWAG"), collapse = "|")
 
+## Source entities to exclude from all visualizations
+exclude_sources = c("BCHN/SWAG")
 
+## Condensed source entity mapping for reporting
+## Maps raw source_entity values to standardized categories
+source_entity_mapping = function(source_entity) {
+  dplyr::case_when(
+    source_entity == "Ocean Wise" ~ "Ocean Wise Conservation Association",
+    source_entity == "Orca Network" ~ "Orca Network via Conserve.io app",
+    source_entity == "JASCO" ~ "JASCO",
+    source_entity == "Whale Alert" ~ "Whale Alert Alaska",
+    stringr::str_detect(source_entity, "WhaleSpotter") ~ "WhaleSpotter",
+    source_entity == "SMRU" ~ "SMRU",
+    TRUE ~ source_entity
+  )
+}
+
+## Years for flexible period comparison (configurable)
+## Set the years you want to compare (up to 5 years)
+comparison_years = c(2024, 2025)  # Can be extended to c(2021, 2022, 2023, 2024, 2025)
 
 ## Test user filter - users to exclude from impact metrics
 ## (to be populated after data exploration)
